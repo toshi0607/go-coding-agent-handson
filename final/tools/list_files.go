@@ -15,36 +15,41 @@ const maxListEntries = 500
 
 // ListFiles はディレクトリ配下のファイル一覧を返すツール。
 // read_file と組み合わせることで「探して → 読む」ができるようになる。
-type ListFiles struct{}
-
-func (ListFiles) Name() string { return "list_files" }
-
-func (ListFiles) Description() string {
-	return "指定したディレクトリ配下のファイルとディレクトリを再帰的に一覧します。ディレクトリは末尾に / が付きます。どんなファイルがあるか把握したいときに最初に使ってください。"
+type ListFiles struct {
+	ws *Workspace
 }
 
-func (ListFiles) InputSchema() Schema {
+// NewListFiles は作業ディレクトリに封じ込められた list_files を作る。
+func NewListFiles(ws *Workspace) *ListFiles { return &ListFiles{ws: ws} }
+
+func (*ListFiles) Name() string { return "list_files" }
+
+func (*ListFiles) Description() string {
+	return "指定したディレクトリ配下のファイルとディレクトリを再帰的に一覧します。ディレクトリは末尾に / が付きます。どんなファイルがあるか把握したいときに最初に使ってください。作業ディレクトリの外は一覧できません。"
+}
+
+func (*ListFiles) InputSchema() Schema {
 	return Schema{
 		Properties: map[string]any{
-			"path": StringProperty("一覧するディレクトリの相対パス。省略時はカレントディレクトリ。"),
+			"path": StringProperty("一覧するディレクトリの相対パス。省略時は作業ディレクトリ全体。"),
 		},
 	}
 }
 
-func (ListFiles) Run(ctx context.Context, input json.RawMessage) (string, error) {
+func (l *ListFiles) Run(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
 		Path string `json:"path"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", fmt.Errorf("入力のパースに失敗: %w", err)
 	}
-	root := in.Path
-	if root == "" {
-		root = "."
+	root, err := l.ws.Resolve(in.Path)
+	if err != nil {
+		return "", err
 	}
 
 	var entries []string
-	err := filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
+	err = filepath.WalkDir(root, func(path string, d fs.DirEntry, err error) error {
 		if err != nil {
 			return err
 		}

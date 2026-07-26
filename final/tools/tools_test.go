@@ -14,14 +14,32 @@ func run(t *testing.T, tool Tool, input string) (string, error) {
 	return tool.Run(context.Background(), json.RawMessage(input))
 }
 
+func testCtx() context.Context { return context.Background() }
+
+// jsonObject はキーと値の並びからJSONオブジェクトを作るテストヘルパー。
+func jsonObject(kv ...string) (json.RawMessage, error) {
+	m := map[string]string{}
+	for i := 0; i+1 < len(kv); i += 2 {
+		m[kv[i]] = kv[i+1]
+	}
+	return json.Marshal(m)
+}
+
+// workspaceFor は dir を作業ディレクトリとする Workspace を作る。
+func workspaceFor(t *testing.T, dir string) *Workspace {
+	t.Helper()
+	ws, err := NewWorkspace(dir)
+	if err != nil {
+		t.Fatalf("NewWorkspace: %v", err)
+	}
+	return ws
+}
+
 func TestReadFile(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "hello.txt")
-	if err := os.WriteFile(path, []byte("hello, world"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	must(t, os.WriteFile(filepath.Join(dir, "hello.txt"), []byte("hello, world"), 0o644))
 
-	got, err := run(t, ReadFile{}, `{"path":"`+path+`"}`)
+	got, err := run(t, NewReadFile(workspaceFor(t, dir)), `{"path":"hello.txt"}`)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -31,8 +49,8 @@ func TestReadFile(t *testing.T) {
 }
 
 func TestReadFileNotFound(t *testing.T) {
-	_, err := run(t, ReadFile{}, `{"path":"no/such/file.txt"}`)
-	if err == nil {
+	ws := workspaceFor(t, t.TempDir())
+	if _, err := run(t, NewReadFile(ws), `{"path":"no/such/file.txt"}`); err == nil {
 		t.Fatal("存在しないファイルはエラーになるべき")
 	}
 }
@@ -45,7 +63,7 @@ func TestListFiles(t *testing.T) {
 	must(t, os.WriteFile(filepath.Join(dir, ".git", "config"), nil, 0o644))
 	must(t, os.WriteFile(filepath.Join(dir, "sub", "b.go"), nil, 0o644))
 
-	got, err := run(t, ListFiles{}, `{"path":"`+dir+`"}`)
+	got, err := run(t, NewListFiles(workspaceFor(t, dir)), `{"path":"."}`)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -64,10 +82,8 @@ func TestEditFileReplace(t *testing.T) {
 	path := filepath.Join(dir, "main.go")
 	must(t, os.WriteFile(path, []byte("func old() {}\n"), 0o644))
 
-	input, _ := json.Marshal(map[string]string{
-		"path": path, "old_str": "func old()", "new_str": "func new()",
-	})
-	if _, err := run(t, EditFile{}, string(input)); err != nil {
+	input, _ := jsonObject("path", "main.go", "old_str", "func old()", "new_str", "func new()")
+	if _, err := NewEditFile(workspaceFor(t, dir)).Run(testCtx(), input); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
@@ -79,16 +95,13 @@ func TestEditFileReplace(t *testing.T) {
 
 func TestEditFileCreate(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "nested", "new.txt")
 
-	input, _ := json.Marshal(map[string]string{
-		"path": path, "old_str": "", "new_str": "created",
-	})
-	if _, err := run(t, EditFile{}, string(input)); err != nil {
+	input, _ := jsonObject("path", "nested/new.txt", "old_str", "", "new_str", "created")
+	if _, err := NewEditFile(workspaceFor(t, dir)).Run(testCtx(), input); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
-	data, _ := os.ReadFile(path)
+	data, _ := os.ReadFile(filepath.Join(dir, "nested", "new.txt"))
 	if got := string(data); got != "created" {
 		t.Errorf("got %q", got)
 	}
@@ -99,10 +112,8 @@ func TestEditFileRejectsAmbiguousMatch(t *testing.T) {
 	path := filepath.Join(dir, "f.txt")
 	must(t, os.WriteFile(path, []byte("x\nx\n"), 0o644))
 
-	input, _ := json.Marshal(map[string]string{
-		"path": path, "old_str": "x", "new_str": "y",
-	})
-	if _, err := run(t, EditFile{}, string(input)); err == nil {
+	input, _ := jsonObject("path", "f.txt", "old_str", "x", "new_str", "y")
+	if _, err := NewEditFile(workspaceFor(t, dir)).Run(testCtx(), input); err == nil {
 		t.Fatal("old_str が複数マッチする編集はエラーになるべき")
 	}
 	// 失敗した編集はファイルを変更しない。
@@ -114,19 +125,17 @@ func TestEditFileRejectsAmbiguousMatch(t *testing.T) {
 
 func TestEditFileRejectsNoMatch(t *testing.T) {
 	dir := t.TempDir()
-	path := filepath.Join(dir, "f.txt")
-	must(t, os.WriteFile(path, []byte("abc"), 0o644))
+	must(t, os.WriteFile(filepath.Join(dir, "f.txt"), []byte("abc"), 0o644))
 
-	input, _ := json.Marshal(map[string]string{
-		"path": path, "old_str": "zzz", "new_str": "y",
-	})
-	if _, err := run(t, EditFile{}, string(input)); err == nil {
+	input, _ := jsonObject("path", "f.txt", "old_str", "zzz", "new_str", "y")
+	if _, err := NewEditFile(workspaceFor(t, dir)).Run(testCtx(), input); err == nil {
 		t.Fatal("old_str がマッチしない編集はエラーになるべき")
 	}
 }
 
 func TestBash(t *testing.T) {
-	got, err := run(t, Bash{}, `{"command":"echo hello"}`)
+	ws := workspaceFor(t, t.TempDir())
+	got, err := run(t, NewBash(ws), `{"command":"echo hello"}`)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -136,7 +145,8 @@ func TestBash(t *testing.T) {
 }
 
 func TestBashFailureIncludesOutput(t *testing.T) {
-	_, err := run(t, Bash{}, `{"command":"echo oops >&2; exit 3"}`)
+	ws := workspaceFor(t, t.TempDir())
+	_, err := run(t, NewBash(ws), `{"command":"echo oops >&2; exit 3"}`)
 	if err == nil {
 		t.Fatal("非ゼロ終了はエラーになるべき")
 	}

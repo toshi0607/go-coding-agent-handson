@@ -31,6 +31,7 @@ import (
 	"github.com/toshi0607/go-coding-agent-handson/final/mcp"
 	"github.com/toshi0607/go-coding-agent-handson/final/permission"
 	"github.com/toshi0607/go-coding-agent-handson/final/prompt"
+	"github.com/toshi0607/go-coding-agent-handson/final/skill"
 	"github.com/toshi0607/go-coding-agent-handson/final/tools"
 )
 
@@ -63,14 +64,31 @@ func run(oneShot string) error {
 
 	stdin := bufio.NewReader(os.Stdin)
 
-	// --- ツールの組み立て ---
-	// 組み込みツール + MCPツール + Taskツール(サブエージェント)。
-	baseTools := []tools.Tool{
-		tools.ReadFile{},
-		tools.ListFiles{},
-		tools.EditFile{},
-		tools.Bash{},
+	// --- ファイル操作の封じ込め ---
+	// ファイル系ツールはこの Workspace 経由でしかパスを解決できない。
+	// LLMが渡してきたパスを直接OSに投げないための境界である。
+	ws, err := tools.NewWorkspace(workDir)
+	if err != nil {
+		return err
 	}
+
+	// --- ツールの組み立て ---
+	// 組み込みツール + スキル + MCPツール + Taskツール(サブエージェント)。
+	baseTools := []tools.Tool{
+		tools.NewReadFile(ws),
+		tools.NewListFiles(ws),
+		tools.NewEditFile(ws),
+		tools.NewBash(ws),
+	}
+
+	skills, err := skill.Load(workDir)
+	if err != nil {
+		return err
+	}
+	if skillTool := skill.NewTool(skills); skillTool != nil {
+		baseTools = append(baseTools, skillTool)
+	}
+
 	mcpTools, closeMCP, err := connectMCPServers(ctx, workDir)
 	if err != nil {
 		return err
@@ -84,9 +102,17 @@ func run(oneShot string) error {
 	newChecker := func(ask permission.Asker) *permission.Checker {
 		return permission.New(permission.Config{
 			ToolPolicies: map[string]permission.Policy{
+				// read_file と list_files を無条件許可にできるのは、
+				// Workspace で作業ディレクトリに封じ込めてあるからである。
+				// 封じ込めがなければ「読み取りだから安全」は成り立たない
+				// (~/.ssh/id_rsa も .env も読めてしまう)。
 				"read_file":  permission.Allow,
 				"list_files": permission.Allow,
-				"task":       permission.Allow, // サブエージェント起動自体は安全。個々のツール実行時に改めてチェックされる
+				// スキルは .agent/skills 配下の手順書を読むだけ。
+				"skill": permission.Allow,
+				// サブエージェント起動自体は安全。サブエージェントが使う
+				// 個々のツールは、そのつど同じ承認フローを通る。
+				"task": permission.Allow,
 			},
 			BashAllowlist: settings.BashAllowlist,
 			Ask:           ask,
@@ -99,7 +125,13 @@ func run(oneShot string) error {
 	if m := os.Getenv("ANTHROPIC_MODEL"); m != "" {
 		model = anthropic.Model(m)
 	}
-	systemPrompt := prompt.Build(workDir)
+	// スキルは目次(名前+説明)だけをシステムプロンプトに載せる。
+	// 本文は skill ツールが呼ばれたときに初めてコンテキストに入る。
+	skillSummaries := make([]prompt.SkillSummary, 0, len(skills))
+	for _, s := range skills {
+		skillSummaries = append(skillSummaries, prompt.SkillSummary{Name: s.Name, Description: s.Description})
+	}
+	systemPrompt := prompt.Build(prompt.Options{WorkDir: workDir, Skills: skillSummaries})
 	hookRunner := hooks.NewRunner(settings.Hooks)
 
 	// --- サブエージェントの組み立て ---
