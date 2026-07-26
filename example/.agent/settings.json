@@ -1,0 +1,11 @@
+{
+  "bashAllowlist": ["ls", "cat", "go", "echo", "grep", "wc"],
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "bash",
+        "command": "if grep -Eq '\\brm\\b.*-[a-zA-Z]*[rf]' ; then echo 'rm による削除はフックによりブロックされました' >&2; exit 2; fi; exit 0"
+      }
+    ]
+  }
+}
