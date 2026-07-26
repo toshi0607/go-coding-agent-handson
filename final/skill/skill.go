@@ -21,10 +21,12 @@
 package skill
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -52,45 +54,133 @@ type Skill struct {
 	Body string
 }
 
+const (
+	// maxDescriptionChars は説明の長さ上限。
+	// 説明はシステムプロンプトに毎ターン載るので、ここが無制限だと
+	// 「目次だけ載せるから軽い」という前提が崩れる。
+	maxDescriptionChars = 200
+
+	// maxBodyBytes は本文の読み込み上限。
+	maxBodyBytes = 256 * 1024
+)
+
 // Load は作業ディレクトリ配下のスキルをすべて読み込む。
 // ディレクトリがなければ空を返す(スキルは任意)。
+//
+// パスは必ず Workspace 経由で解決する。スキルは
+// 「リポジトリに置かれたファイルを読んでプロンプトに載せる」機能で、
+// SKILL.md が作業ディレクトリの外を指すシンボリックリンクだと、
+// 外部ファイルの中身がそのままLLMに渡ってしまう。しかもスキルの
+// 読み取りは承認フローを通していない(無条件許可)ため、
+// 封じ込めを外すと確認プロンプトすら出ない。
+//
+// 「検証を各ツールに任せると必ずどれかで忘れる」という Workspace の
+// 設計意図はこのパッケージにも当てはまる。ファイルを読む機能を
+// 追加するたびに、封じ込めを通したかを確認すること。
 //
 // 起動時に本文まで読んでしまうが、これはメモリ上に置くだけで、
 // LLMに送るのは Description だけである。「読み込むタイミング」と
 // 「コンテキストに載せるタイミング」を分けているのが要点。
-func Load(workDir string) ([]Skill, error) {
-	dir := filepath.Join(workDir, SkillsDir)
-	entries, err := os.ReadDir(dir)
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
+//
+// 個別スキルの読み込み失敗はエラーにせず、警告を warn に書いて
+// そのスキルだけ飛ばす。スキルは任意機能なので、1つの壊れた
+// SKILL.md でエージェント全体が起動しなくなる方が困る。
+func Load(ws *tools.Workspace, warn io.Writer) ([]Skill, error) {
+	dir, err := ws.Resolve(SkillsDir)
 	if err != nil {
 		return nil, err
 	}
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil, nil
+	}
+	if err != nil {
+		fmt.Fprintf(warn, "警告: スキルディレクトリを読めません: %v\n", err)
+		return nil, nil
+	}
 
 	var skills []Skill
+	seen := map[string]string{} // スキル名 → 由来のディレクトリ名
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
 		}
-		data, err := os.ReadFile(filepath.Join(dir, e.Name(), EntryFile))
-		if os.IsNotExist(err) {
+		s, err := loadOne(ws, e.Name())
+		if errors.Is(err, fs.ErrNotExist) {
 			continue // SKILL.md がないディレクトリは無視
 		}
 		if err != nil {
-			return nil, err
+			fmt.Fprintf(warn, "警告: スキル %s を読み込めません: %v\n", e.Name(), err)
+			continue
 		}
-		s := parse(string(data))
-		if s.Name == "" {
-			s.Name = e.Name() // フロントマターに name がなければディレクトリ名
+		// 名前が衝突すると、片方が黙って到達不能になる。
+		// 静かに壊れるより警告して飛ばす。
+		if from, dup := seen[s.Name]; dup {
+			fmt.Fprintf(warn, "警告: スキル名 %q が %s と %s で重複しています。%s を無視します\n",
+				s.Name, from, e.Name(), e.Name())
+			continue
 		}
-		if s.Description == "" {
-			s.Description = "(説明なし)"
-		}
+		seen[s.Name] = e.Name()
 		skills = append(skills, s)
 	}
 	sort.Slice(skills, func(i, j int) bool { return skills[i].Name < skills[j].Name })
 	return skills, nil
+}
+
+// loadOne は1つのスキルディレクトリを読み込む。
+func loadOne(ws *tools.Workspace, dirName string) (Skill, error) {
+	path, err := ws.Resolve(filepath.Join(SkillsDir, dirName, EntryFile))
+	if err != nil {
+		return Skill{}, err
+	}
+	data, err := readLimited(path, maxBodyBytes)
+	if err != nil {
+		return Skill{}, err
+	}
+	s, err := parse(string(data))
+	if err != nil {
+		return Skill{}, err
+	}
+	if s.Name == "" {
+		s.Name = dirName // フロントマターに name がなければディレクトリ名
+	}
+	if s.Description == "" {
+		s.Description = "(説明なし)"
+	}
+	s.Description = truncate(s.Description, maxDescriptionChars)
+	return s, nil
+}
+
+// readLimited はファイルを読む。上限を超えていればエラーにする。
+//
+// 上限で黙って切るのではなくエラーにするのが要点。途中で切ると
+// フロントマターの閉じ "---" を読み落として「フロントマターが
+// 閉じられていません」という無関係なエラーになり、原因が分からなくなる。
+// 制限に当たったことは制限に当たったと伝えるべきである。
+func readLimited(path string, limit int64) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+
+	// 上限+1バイト読んで、超過を検出する。
+	data, err := io.ReadAll(io.LimitReader(f, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, fmt.Errorf("%s が大きすぎます(上限 %dバイト)", EntryFile, limit)
+	}
+	return data, nil
+}
+
+func truncate(s string, max int) string {
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	return string(runes[:max]) + "…"
 }
 
 // parse はSKILL.mdをフロントマターと本文に分ける。
@@ -105,17 +195,26 @@ func Load(workDir string) ([]Skill, error) {
 //
 // YAMLライブラリを使わず自前で数行のパースにしているのは、
 // 教材として依存を増やしたくないから。実務ならYAMLパーサでよい。
-func parse(content string) Skill {
-	scanner := bufio.NewScanner(strings.NewReader(content))
-	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+//
+// bufio.Scanner を使わず strings.Split で行分割しているのは、
+// Scanner には「1行が長すぎると途中で止まる」制限があり、
+// scanner.Err() を見忘れると本文が黙って切り詰められるため。
+// 「エラーを見落としたときに静かに壊れる」APIは避けるのが安全。
+func parse(content string) (Skill, error) {
+	// UTF-8のBOM(U+FEFF)を除去する。これがあると1行目が "---" と
+	// 一致せず、フロントマターが本文に丸ごと漏れる。
+	// Windowsのエディタで保存すると付くことがある。
+	const bom = "\ufeff"
+	content = strings.TrimPrefix(content, bom)
 
 	var s Skill
 	var body strings.Builder
 	inFrontmatter := false
 	frontmatterDone := false
 
-	for lineNo := 0; scanner.Scan(); lineNo++ {
-		line := scanner.Text()
+	lines := strings.Split(content, "\n")
+	for lineNo, line := range lines {
+		line = strings.TrimSuffix(line, "\r") // CRLF対応
 
 		// 1行目の "---" だけをフロントマターの開始と認める。
 		// 本文中の水平線("---")を誤ってフロントマターと解釈しないため。
@@ -149,8 +248,17 @@ func parse(content string) Skill {
 		body.WriteString("\n")
 	}
 
+	// フロントマターが閉じられていないと本文が空になり、LLMに空文字を
+	// 返すことになる。書き間違いを黙って通さず、エラーで気づかせる。
+	if inFrontmatter {
+		return Skill{}, errors.New("フロントマターが --- で閉じられていません")
+	}
+
 	s.Body = strings.TrimRight(body.String(), "\n")
-	return s
+	if s.Body == "" {
+		return Skill{}, errors.New("本文が空です")
+	}
+	return s, nil
 }
 
 // Tool は skill ツール。LLMがスキルの本文を読むために使う。
@@ -164,11 +272,13 @@ type Tool struct {
 }
 
 // NewTool は読み込んだスキルから skill ツールを作る。
-// スキルが1つもなければ nil を返す(空のツールをLLMに見せない)。
+//
+// スキルが0件のときに nil を返す設計にはしていない。
+// Goでは具体型のnilポインタをインターフェースに入れると
+// 「非nilのインターフェース値」になり、`tool != nil` の判定を
+// すり抜けてメソッド呼び出しでpanicする。よく踏まれる罠なので、
+// 「0件かどうか」は呼び出し側が len(skills) で判定する。
 func NewTool(skills []Skill) *Tool {
-	if len(skills) == 0 {
-		return nil
-	}
 	t := &Tool{byName: make(map[string]Skill, len(skills))}
 	for _, s := range skills {
 		t.byName[s.Name] = s

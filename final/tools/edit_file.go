@@ -69,12 +69,10 @@ func (e *EditFile) Run(ctx context.Context, input json.RawMessage) (string, erro
 	switch {
 	case errors.Is(err, os.ErrNotExist) && in.OldStr == "":
 		// 新規作成: old_str が空 かつ ファイルが存在しない場合のみ。
-		if dir := filepath.Dir(path); dir != "." {
-			if err := os.MkdirAll(dir, 0o755); err != nil {
-				return "", err
-			}
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			return "", err
 		}
-		if err := os.WriteFile(path, []byte(in.NewStr), 0o644); err != nil {
+		if err := createNew(path, in.NewStr); err != nil {
 			return "", err
 		}
 		return fmt.Sprintf("%s を新規作成しました", in.Path), nil
@@ -97,4 +95,26 @@ func (e *EditFile) Run(ctx context.Context, input json.RawMessage) (string, erro
 		return "", err
 	}
 	return fmt.Sprintf("%s を編集しました", in.Path), nil
+}
+
+// createNew は新規ファイルを作成する。既に存在すれば失敗する。
+//
+// os.WriteFile ではなく O_CREATE|O_EXCL を使うのは多層防御である。
+// Workspace がパスを検証済みでも、検証してから書き込むまでの隙に
+// そこへシンボリックリンクを作られる可能性がある(TOCTOU)。
+// O_EXCL があればリンクを辿った作成は EEXIST で失敗するため、
+// 検証をすり抜けたとしても書き込みは成立しない。
+//
+// 「検証」と「操作」の2箇所で守るのが安全設計の基本で、
+// 検証だけに頼る実装はレースに弱い。
+func createNew(path, content string) error {
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.WriteString(content); err != nil {
+		f.Close()
+		return err
+	}
+	return f.Close()
 }

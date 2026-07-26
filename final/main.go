@@ -71,6 +71,11 @@ func run(oneShot string) error {
 	if err != nil {
 		return err
 	}
+	// 以降は解決済みの絶対パス(ws.Root())を使う。os.Getwd() の値を
+	// そのまま使い回すと、macOSで /tmp が /private/tmp のリンクである
+	// ために「システムプロンプトに書かれた作業ディレクトリ」と
+	// 「実際の封じ込め境界」が食い違う。
+	workDir = ws.Root()
 
 	// --- ツールの組み立て ---
 	// 組み込みツール + スキル + MCPツール + Taskツール(サブエージェント)。
@@ -81,12 +86,13 @@ func run(oneShot string) error {
 		tools.NewBash(ws),
 	}
 
-	skills, err := skill.Load(workDir)
+	// スキルもファイルを読む機能なので、封じ込め(ws)を通す。
+	skills, err := skill.Load(ws, os.Stderr)
 	if err != nil {
 		return err
 	}
-	if skillTool := skill.NewTool(skills); skillTool != nil {
-		baseTools = append(baseTools, skillTool)
+	if len(skills) > 0 {
+		baseTools = append(baseTools, skill.NewTool(skills))
 	}
 
 	mcpTools, closeMCP, err := connectMCPServers(ctx, workDir)

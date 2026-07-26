@@ -95,6 +95,106 @@ func TestResolveRejectsSymlinkEscape(t *testing.T) {
 	}
 }
 
+// 壊れたシンボリックリンク(リンクはあるがリンク先が存在しない)経由の脱出。
+//
+// EvalSymlinks は「存在しない」と「壊れたリンク」の両方で ENOENT を
+// 返すため、両者を同一視すると「リンク自身のパス(=作業ディレクトリ内)」
+// を返してしまい、os.WriteFile がリンクを辿って外に書き込む。
+// gitは壊れたリンクをそのまま配布できるので、悪意あるリポジトリを
+// cloneして中でエージェントを動かすだけで成立する。
+func TestResolveRejectsDanglingSymlinkEscape(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windowsではシンボリックリンクの作成に特権が必要")
+	}
+
+	// リンクの張り方(絶対/相対)と深さを変えた3ケース。
+	// target は作業ディレクトリを受け取って組み立てる——テスト側で
+	// 相対パスを組み間違えると「作業ディレクトリ内に戻ってしまい、
+	// 脱出していないのに脱出したと誤判定する」ので、必ず
+	// filepath.Rel で作業ディレクトリからの相対パスを計算する。
+	cases := map[string]struct {
+		linkName string
+		target   func(t *testing.T, workDir, victim string) string
+		probe    string
+	}{
+		"絶対パスの壊れたリンク": {
+			linkName: "notes.txt",
+			target:   func(t *testing.T, workDir, victim string) string { return victim },
+			probe:    "notes.txt",
+		},
+		"相対パスの壊れたリンク": {
+			linkName: "notes.md",
+			target: func(t *testing.T, workDir, victim string) string {
+				rel, err := filepath.Rel(workDir, victim)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return rel
+			},
+			probe: "notes.md",
+		},
+		"壊れたリンク配下": {
+			linkName: "linkdir",
+			target: func(t *testing.T, workDir, victim string) string {
+				return filepath.Join(filepath.Dir(victim), "nodir")
+			},
+			probe: "linkdir/deep/file.txt",
+		},
+	}
+
+	for name, tc := range cases {
+		t.Run(name, func(t *testing.T) {
+			ws, dir := newTestWorkspace(t)
+			outsideDir := t.TempDir()
+			victim := filepath.Join(outsideDir, "pwned.txt") // まだ存在しない
+
+			target := tc.target(t, ws.Root(), victim)
+			must(t, os.Symlink(target, filepath.Join(dir, tc.linkName)))
+
+			if got, err := ws.Resolve(tc.probe); err == nil {
+				t.Errorf("壊れたシンボリックリンク経由で脱出できた: %s (target=%s) → %s", tc.probe, target, got)
+			}
+
+			// ツール経由でも実際に外部へ書き込めないこと。
+			input, _ := jsonObject("path", tc.probe, "old_str", "", "new_str", "PWNED")
+			if _, err := NewEditFile(ws).Run(testCtx(), input); err == nil {
+				t.Error("edit_file が壊れたリンク経由で書き込めた")
+			}
+			if _, err := os.Stat(victim); err == nil {
+				t.Fatalf("作業ディレクトリ外の %s が作成された", victim)
+			}
+		})
+	}
+}
+
+// 作業ディレクトリ内を指す壊れたリンクは正当なので通ること。
+// 壊れたリンクを一律拒否すると誤検知になる。
+func TestResolveAllowsDanglingSymlinkInsideWorkspace(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windowsではシンボリックリンクの作成に特権が必要")
+	}
+	ws, dir := newTestWorkspace(t)
+	must(t, os.Symlink(filepath.Join(dir, "notyet.txt"), filepath.Join(dir, "link.txt")))
+
+	if _, err := ws.Resolve("link.txt"); err != nil {
+		t.Errorf("作業ディレクトリ内を指す壊れたリンクが拒否された: %v", err)
+	}
+}
+
+// 作業ディレクトリがファイルシステムのルートでも動くこと。
+// root+"/" の前方一致で判定していると "//" になって内側を全部拒否する。
+func TestWorkspaceAtFilesystemRoot(t *testing.T) {
+	ws, err := NewWorkspace(string(filepath.Separator))
+	if err != nil {
+		t.Skipf("ルートを作業ディレクトリにできない環境: %v", err)
+	}
+	for _, path := range []string{"etc", "/etc"} {
+		if _, err := ws.Resolve(path); err != nil {
+			t.Errorf("ルート配下の %q が拒否された: %v", path, err)
+		}
+	}
+}
+
 // root と前方一致する別ディレクトリ("/x/app" と "/x/app-secrets")を
 // 通してしまう典型的なバグの回帰テスト。
 func TestResolveRejectsSiblingWithSharedPrefix(t *testing.T) {

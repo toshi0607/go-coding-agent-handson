@@ -240,6 +240,14 @@ func (a *Agent) executeTool(ctx context.Context, block anthropic.ContentBlockUni
 		return anthropic.NewToolResultBlock(block.ID, err.Error(), true)
 	}
 
+	// 空文字のツール結果は tool_result に空のテキストブロックを作り、
+	// APIに拒否される。空ファイルを読んだ、出力のないコマンドを実行した、
+	// といった正常なケースでも起こるので、ここで必ず埋める。
+	// 個々のツールに任せず1箇所で処理するのは、権限チェックと同じ理由。
+	if result == "" {
+		result = "(空の結果)"
+	}
+
 	result = a.ctxmgr.TruncateToolResult(result)
 	a.hooks.RunPost(ctx, block.Name, block.Input, result)
 	return anthropic.NewToolResultBlock(block.ID, result, false)
