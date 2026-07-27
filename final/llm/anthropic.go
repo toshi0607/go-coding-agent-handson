@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/anthropics/anthropic-sdk-go"
+	"github.com/anthropics/anthropic-sdk-go/option"
 )
 
 // AnthropicClient は anthropic-sdk-go を使った Client の実装。
@@ -13,8 +14,12 @@ type AnthropicClient struct {
 
 // NewAnthropicClient は環境変数 ANTHROPIC_API_KEY から認証情報を読む
 // クライアントを作る。
-func NewAnthropicClient() *AnthropicClient {
-	return &AnthropicClient{client: anthropic.NewClient()}
+//
+// opts はSDKに渡す追加設定。通常は不要だが、テストで接続先を
+// 差し替える(実APIを叩かずにストリーミング処理を検証する)ために
+// 受け口だけ開けてある。
+func NewAnthropicClient(opts ...option.RequestOption) *AnthropicClient {
+	return &AnthropicClient{client: anthropic.NewClient(opts...)}
 }
 
 func (c *AnthropicClient) Complete(ctx context.Context, params anthropic.MessageNewParams) (*anthropic.Message, error) {

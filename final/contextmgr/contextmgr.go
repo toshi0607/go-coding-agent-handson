@@ -57,12 +57,35 @@ func NewManager() *Manager {
 //
 // 切り詰めたことは必ずLLMに伝える。黙って切ると、LLMは「全部読めた」と
 // 誤解したまま推論を進めてしまう。
+//
+// 数えるのはバイトではなく文字(ルーン)である。Goの文字列はUTF-8の
+// バイト列なので `result[:20000]` と書くと日本語やソースコード中の
+// マルチバイト文字の途中で切れ、壊れたバイトがそのままAPIに送られる。
+// 「文字数で切り詰めた」と言いながらバイト数で切るのは、日本語を
+// 扱うツールでは実害のある嘘になる。
 func (m *Manager) TruncateToolResult(result string) string {
-	if len(result) <= m.MaxToolResultChars {
+	head, total := truncateRunes(result, m.MaxToolResultChars)
+	if total <= m.MaxToolResultChars {
 		return result
 	}
-	return result[:m.MaxToolResultChars] +
-		fmt.Sprintf("\n... (長すぎるため %d 文字で切り詰めました。全体は %d 文字あります。続きが必要なら範囲を絞って取得してください)", m.MaxToolResultChars, len(result))
+	return head +
+		fmt.Sprintf("\n... (長すぎるため %d 文字で切り詰めました。全体は %d 文字あります。続きが必要なら範囲を絞って取得してください)", m.MaxToolResultChars, total)
+}
+
+// truncateRunes は s の先頭 max 文字と、s 全体の文字数を返す。
+//
+// []rune への変換ではなく range で走査しているのは、ツール結果が
+// 数MBになりうるため。range over string はルーンの開始バイト位置を
+// 返すので、そこで切ればバイト境界とルーン境界が一致する。
+func truncateRunes(s string, max int) (head string, total int) {
+	head = s
+	for i := range s {
+		if total == max {
+			head = s[:i]
+		}
+		total++
+	}
+	return head, total
 }
 
 // ShouldCompact は直近のAPIレスポンスのトークン使用量から、
@@ -80,6 +103,9 @@ const summaryPrompt = `これまでの会話を、この続きから作業を再
 - 未完了のタスクと次にやるべきこと
 要約以外の文章(前置きなど)は不要です。`
 
+// summaryMaxTokens は要約1回分の出力上限。
+const summaryMaxTokens = 4096
+
 // Compact は会話履歴を要約して置き換える。
 //
 // やることはシンプルで、「履歴の最後に要約依頼を足してLLMに投げ、
@@ -93,15 +119,26 @@ const summaryPrompt = `これまでの会話を、この続きから作業を再
 // 下に行くほど直近の文脈は保たれるが、実装は複雑になる。
 // 何が失われるかを意識して選ぶこと。要約は非可逆圧縮であり、
 // 一度失った詳細は戻らない。
-func (m *Manager) Compact(ctx context.Context, client llm.Client, model anthropic.Model, history []anthropic.MessageParam) ([]anthropic.MessageParam, error) {
-	request := append(slices.Clone(history),
+//
+// base には通常のターンと同じリクエスト(agent.buildParams() の結果)を
+// そのまま渡す。要約だからといって Messages 以外を省いてはいけない:
+// 圧縮対象の履歴には tool_use / tool_result ブロックが含まれており、
+// tools を伴わないリクエストでそれらを送るとAPIに拒否される。
+// 「要約用の軽いリクエスト」を別途組み立てたくなるが、履歴の中身と
+// リクエストのパラメータには対応関係があり、勝手に外せない。
+func (m *Manager) Compact(ctx context.Context, client llm.Client, base anthropic.MessageNewParams) ([]anthropic.MessageParam, error) {
+	params := base
+	params.MaxTokens = summaryMaxTokens
+	// 元のスライスを共有したまま append すると呼び出し側の履歴を
+	// 破壊しうるので、必ず複製してから足す。
+	params.Messages = append(slices.Clone(base.Messages),
 		anthropic.NewUserMessage(anthropic.NewTextBlock(summaryPrompt)))
+	// tools を渡す以上、LLMは要約の代わりにツールを呼ぶ選択もできてしまう。
+	// ここで欲しいのはテキストの要約だけなので、tool_choice で封じる。
+	noTools := anthropic.NewToolChoiceNoneParam()
+	params.ToolChoice = anthropic.ToolChoiceUnionParam{OfNone: &noTools}
 
-	resp, err := client.Complete(ctx, anthropic.MessageNewParams{
-		Model:     model,
-		MaxTokens: 4096,
-		Messages:  request,
-	})
+	resp, err := client.Complete(ctx, params)
 	if err != nil {
 		return nil, fmt.Errorf("compaction用の要約に失敗: %w", err)
 	}

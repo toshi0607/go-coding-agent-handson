@@ -13,32 +13,88 @@
 //   - initialize:  ハンドシェイク(バージョンと能力のすり合わせ)
 //   - tools/list:  サーバーが提供するツールの一覧を取得
 //   - tools/call:  ツールを実行
+//
+// 素朴なぶん、相手が「他人の書いたプロセス」であることの難しさは
+// こちらが引き受けることになる。応答が返ってこない、終了させても
+// 死なない、エラーを標準エラー出力にだけ吐く——外部プロセスと
+// 話す以上どれも普通に起きるので、そのための備えがこのファイルの
+// 分量の多くを占めている。
 package mcp
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os/exec"
+	"time"
 )
 
 // protocolVersion はこのクライアントが話すMCPのプロトコルバージョン。
 const protocolVersion = "2025-06-18"
 
+const (
+	// callTimeout は1回のリクエストの応答待ち上限。
+	// これがないと、応答を返さないサーバー1つでエージェント全体が
+	// 無言で固まる。ユーザーから見ると「Enterを押したら二度と
+	// プロンプトが返ってこない」という最悪の壊れ方になる。
+	callTimeout = 30 * time.Second
+
+	// shutdownTimeout は終了時にサーバーの停止を待つ上限。
+	shutdownTimeout = 3 * time.Second
+
+	// maxMessageBytes は1メッセージの最大サイズ(大きなツール結果に備える)。
+	maxMessageBytes = 10 * 1024 * 1024
+
+	// lineBufferSize は読み取りゴルーチンの先読みバッファ段数。
+	// サーバーが立て続けに書いても、こちらが読むまで子プロセスが
+	// ブロックしないようにするための余裕。
+	lineBufferSize = 16
+)
+
+// Server は接続するMCPサーバーの起動方法。
+type Server struct {
+	// Name はサーバーの識別名。ツール名の名前空間とログの接頭辞に使う。
+	Name string
+	// Command / Args は起動するコマンド。
+	Command string
+	Args    []string
+	// Stderr はサーバーの標準エラー出力の転送先。nilなら捨てる。
+	Stderr io.Writer
+}
+
+// message は読み取りゴルーチンから届く1件のメッセージ、
+// または読み取りの終了理由。
+type message struct {
+	line []byte
+	err  error
+}
+
 // Client は1つのMCPサーバーとの接続を表す。
 type Client struct {
 	serverName string
 	writer     io.Writer
-	scanner    *bufio.Scanner
 	nextID     int
 	cmd        *exec.Cmd // 子プロセス起動時のみ非nil
+
+	// lines は読み取りゴルーチンからの受け口。
+	//
+	// なぜ直接 Read せずゴルーチンを挟むのか。ブロックしている
+	// Read は context のキャンセルでは中断できないからである。
+	// 「別のゴルーチンで読み、こちらは channel と ctx.Done() を
+	// select する」のが、GoでブロッキングI/Oに期限を付ける定石。
+	lines chan message
+	// closed は読み取りゴルーチンを諦めさせるための合図。
+	closed chan struct{}
+	// readDone は読み取りゴルーチンが終了したことを示す。
+	readDone chan struct{}
 }
 
 // Connect はMCPサーバーを子プロセスとして起動し、ハンドシェイクまで済ませる。
-func Connect(ctx context.Context, serverName, command string, args ...string) (*Client, error) {
-	cmd := exec.CommandContext(ctx, command, args...)
+func Connect(ctx context.Context, s Server) (*Client, error) {
+	cmd := exec.CommandContext(ctx, s.Command, s.Args...)
 	stdin, err := cmd.StdinPipe()
 	if err != nil {
 		return nil, err
@@ -47,15 +103,22 @@ func Connect(ctx context.Context, serverName, command string, args ...string) (*
 	if err != nil {
 		return nil, err
 	}
+	// サーバーのログを捨てない。MCPサーバーが動かないときの手がかりは
+	// たいてい標準エラー出力にしかなく、これを配線し忘れると
+	// 「なぜか繋がらない」だけが残る。複数サーバーのログが混ざるので、
+	// どのサーバーの出力かが分かるよう接頭辞を付ける。
+	if s.Stderr != nil {
+		cmd.Stderr = &prefixWriter{w: s.Stderr, prefix: "[mcp:" + s.Name + "] "}
+	}
 	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("MCPサーバー %s の起動に失敗: %w", serverName, err)
+		return nil, fmt.Errorf("MCPサーバー %s の起動に失敗: %w", s.Name, err)
 	}
 
-	c := newClient(serverName, stdin, stdout)
+	c := newClient(s.Name, stdin, stdout)
 	c.cmd = cmd
-	if err := c.initialize(); err != nil {
+	if err := c.initialize(ctx); err != nil {
 		_ = cmd.Process.Kill()
-		return nil, fmt.Errorf("MCPサーバー %s の初期化に失敗: %w", serverName, err)
+		return nil, fmt.Errorf("MCPサーバー %s の初期化に失敗: %w", s.Name, err)
 	}
 	return c, nil
 }
@@ -63,20 +126,63 @@ func Connect(ctx context.Context, serverName, command string, args ...string) (*
 // newClient は任意の入出力ペアからクライアントを作る。
 // テストでは子プロセスの代わりに io.Pipe を渡して疑似サーバーと会話する。
 func newClient(serverName string, w io.Writer, r io.Reader) *Client {
+	c := &Client{
+		serverName: serverName,
+		writer:     w,
+		lines:      make(chan message, lineBufferSize),
+		closed:     make(chan struct{}),
+		readDone:   make(chan struct{}),
+	}
+	go c.readLoop(r)
+	return c
+}
+
+// readLoop はサーバーの出力を1行ずつ読んで channel に流す。
+func (c *Client) readLoop(r io.Reader) {
+	defer close(c.readDone)
+	defer close(c.lines)
+
 	scanner := bufio.NewScanner(r)
-	scanner.Buffer(make([]byte, 0, 64*1024), 10*1024*1024) // 大きなツール結果に備える
-	return &Client{serverName: serverName, writer: w, scanner: scanner}
+	scanner.Buffer(make([]byte, 0, 64*1024), maxMessageBytes)
+	for scanner.Scan() {
+		// scanner.Bytes() の返すスライスは次の Scan で上書きされるので複製する。
+		select {
+		case c.lines <- message{line: bytes.Clone(scanner.Bytes())}:
+		case <-c.closed:
+			return // Close() が諦めた。送信待ちのまま残らないよう抜ける
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		select {
+		case c.lines <- message{err: err}:
+		case <-c.closed:
+		}
+	}
 }
 
 // Close は接続を閉じ、子プロセスの終了を待つ。
 func (c *Client) Close() error {
+	// stdin を閉じるとサーバーは終了する(stdio transport の作法)。
 	if closer, ok := c.writer.(io.Closer); ok {
-		_ = closer.Close() // stdinを閉じるとサーバーは終了する
+		_ = closer.Close()
 	}
-	if c.cmd != nil {
-		return c.cmd.Wait()
+	if c.cmd == nil {
+		return nil
 	}
-	return nil
+
+	// 読み取りゴルーチンの終了 = stdout のEOF = サーバーの終了。
+	// 終わらないサーバーを待ち続けるとエージェント自体が終了できなく
+	// なるので、上限を切って強制終了に切り替える。
+	select {
+	case <-c.readDone:
+	case <-time.After(shutdownTimeout):
+		_ = c.cmd.Process.Kill()
+		close(c.closed) // 送信待ちで止まっているゴルーチンを解放する
+		<-c.readDone
+	}
+	// Wait は「stdoutからの読み取りが全部終わってから」呼ぶ必要がある。
+	// 上で readDone を待っているのはそのためでもある。
+	return c.cmd.Wait()
 }
 
 // ---- JSON-RPC 2.0 のメッセージ型 ----
@@ -104,7 +210,14 @@ func (e *rpcError) Error() string {
 }
 
 // call はリクエストを送り、対応するレスポンスを待つ。
-func (c *Client) call(method string, params any, result any) error {
+//
+// 待ち時間には必ず上限を置く。ここで無期限に待つと、応答しない
+// サーバーが1つあるだけでエージェントが固まり、Ctrl-Cしか
+// 残らなくなる。ctx は呼び出し側のキャンセル(Ctrl-C)も運んでくる。
+func (c *Client) call(ctx context.Context, method string, params any, result any) error {
+	ctx, cancel := context.WithTimeout(ctx, callTimeout)
+	defer cancel()
+
 	c.nextID++
 	id := c.nextID
 	if err := c.send(request{Jsonrpc: "2.0", ID: &id, Method: method, Params: params}); err != nil {
@@ -114,30 +227,42 @@ func (c *Client) call(method string, params any, result any) error {
 	// 自分のリクエストIDに対する応答が来るまで読む。
 	// サーバーは通知(IDなしのメッセージ)を勝手に送ってくることが
 	// あるので、それらは読み飛ばす。
-	for c.scanner.Scan() {
-		line := c.scanner.Bytes()
-		if len(line) == 0 {
-			continue
+	//
+	// IDで突き合わせているおかげで、タイムアウトで諦めたリクエストの
+	// 応答が後から届いても実害がない——次の call が「自分宛てでない」
+	// として読み飛ばす。IDを見ずに「次に来た1行」を答えとみなす
+	// 実装だと、一度タイムアウトしただけで以降ずっと1つずつ
+	// ずれた応答を読み続けることになる。
+	for {
+		select {
+		case <-ctx.Done():
+			return fmt.Errorf("MCPサーバー %s が %s に応答しません: %w", c.serverName, method, ctx.Err())
+		case msg, ok := <-c.lines:
+			if !ok {
+				return fmt.Errorf("MCPサーバー %s との接続が切れました", c.serverName)
+			}
+			if msg.err != nil {
+				return msg.err
+			}
+			if len(msg.line) == 0 {
+				continue
+			}
+			var resp response
+			if err := json.Unmarshal(msg.line, &resp); err != nil {
+				return fmt.Errorf("MCPレスポンスのパースに失敗: %w", err)
+			}
+			if resp.ID == nil || *resp.ID != id {
+				continue // 通知や別リクエストへの応答
+			}
+			if resp.Error != nil {
+				return resp.Error
+			}
+			if result != nil {
+				return json.Unmarshal(resp.Result, result)
+			}
+			return nil
 		}
-		var resp response
-		if err := json.Unmarshal(line, &resp); err != nil {
-			return fmt.Errorf("MCPレスポンスのパースに失敗: %w", err)
-		}
-		if resp.ID == nil || *resp.ID != id {
-			continue // 通知や別リクエストへの応答
-		}
-		if resp.Error != nil {
-			return resp.Error
-		}
-		if result != nil {
-			return json.Unmarshal(resp.Result, result)
-		}
-		return nil
 	}
-	if err := c.scanner.Err(); err != nil {
-		return err
-	}
-	return fmt.Errorf("MCPサーバー %s との接続が切れました", c.serverName)
 }
 
 // send はメッセージを1行のJSONとして書き込む(改行区切りフレーミング)。
@@ -152,7 +277,7 @@ func (c *Client) send(req request) error {
 
 // initialize はMCPのハンドシェイクを行う。
 // initialize リクエスト → 応答 → initialized 通知、の3ステップ。
-func (c *Client) initialize() error {
+func (c *Client) initialize(ctx context.Context) error {
 	params := map[string]any{
 		"protocolVersion": protocolVersion,
 		"capabilities":    map[string]any{},
@@ -161,7 +286,7 @@ func (c *Client) initialize() error {
 			"version": "0.1.0",
 		},
 	}
-	if err := c.call("initialize", params, nil); err != nil {
+	if err := c.call(ctx, "initialize", params, nil); err != nil {
 		return err
 	}
 	// initialized は通知なのでIDを付けず、応答も待たない。
@@ -176,18 +301,18 @@ type ToolInfo struct {
 }
 
 // ListTools はサーバーが提供するツールの一覧を取得する。
-func (c *Client) ListTools() ([]ToolInfo, error) {
+func (c *Client) ListTools(ctx context.Context) ([]ToolInfo, error) {
 	var result struct {
 		Tools []ToolInfo `json:"tools"`
 	}
-	if err := c.call("tools/list", map[string]any{}, &result); err != nil {
+	if err := c.call(ctx, "tools/list", map[string]any{}, &result); err != nil {
 		return nil, err
 	}
 	return result.Tools, nil
 }
 
 // CallTool はツールを実行し、テキスト結果を返す。
-func (c *Client) CallTool(name string, arguments json.RawMessage) (string, error) {
+func (c *Client) CallTool(ctx context.Context, name string, arguments json.RawMessage) (string, error) {
 	params := map[string]any{
 		"name":      name,
 		"arguments": arguments,
@@ -199,7 +324,7 @@ func (c *Client) CallTool(name string, arguments json.RawMessage) (string, error
 		} `json:"content"`
 		IsError bool `json:"isError"`
 	}
-	if err := c.call("tools/call", params, &result); err != nil {
+	if err := c.call(ctx, "tools/call", params, &result); err != nil {
 		return "", err
 	}
 
@@ -213,4 +338,30 @@ func (c *Client) CallTool(name string, arguments json.RawMessage) (string, error
 		return "", fmt.Errorf("MCPツール %s がエラーを返しました: %s", name, text)
 	}
 	return text, nil
+}
+
+// prefixWriter は書き込みの各行の先頭に固定の文字列を足す io.Writer。
+//
+// 子プロセスの出力は行の途中で分割されて届くことがあるので、
+// 改行が来るまで溜めてから書き出す。溜めずに Write ごとに接頭辞を
+// 付けると、1行の途中に接頭辞が挟まる。
+type prefixWriter struct {
+	w      io.Writer
+	prefix string
+	buf    []byte
+}
+
+func (p *prefixWriter) Write(data []byte) (int, error) {
+	p.buf = append(p.buf, data...)
+	for {
+		i := bytes.IndexByte(p.buf, '\n')
+		if i < 0 {
+			return len(data), nil
+		}
+		line := append([]byte(p.prefix), p.buf[:i+1]...)
+		p.buf = p.buf[i+1:]
+		if _, err := p.w.Write(line); err != nil {
+			return 0, err
+		}
+	}
 }

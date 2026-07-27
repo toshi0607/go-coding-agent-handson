@@ -3,7 +3,11 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"slices"
+	"strings"
 	"testing"
+
+	"github.com/toshi0607/go-coding-agent-handson/final/hooks"
 )
 
 func TestLoadSettings(t *testing.T) {
@@ -41,6 +45,58 @@ func TestLoadSettingsMissingFileIsOK(t *testing.T) {
 	}
 	if len(s.BashAllowlist) != 0 {
 		t.Errorf("ゼロ値のはず: %+v", s)
+	}
+}
+
+// 起動時の信頼確認でユーザーに見せる一覧。
+// ここに漏れがあると「確認したはずのものが全部ではなかった」ことになり、
+// 確認そのものが意味を失う。
+func TestExecutables(t *testing.T) {
+	settings := Settings{
+		BashAllowlist: []string{"ls", "go"},
+		Hooks: hooks.Config{
+			"PreToolUse":  {{Matcher: "bash", Command: "guard.sh"}},
+			"PostToolUse": {{Matcher: "*", Command: "log.sh"}},
+		},
+	}
+	mcpCfg := MCPConfig{MCPServers: map[string]MCPServer{
+		"weather": {Command: "weather-server", Args: []string{"--port", "8080"}},
+	}}
+
+	list := Executables(settings, mcpCfg)
+
+	// フック2件 + MCPサーバー1件 + allowlist 1件。
+	if len(list) != 4 {
+		t.Fatalf("実行されるものが漏れている: %+v", list)
+	}
+
+	joined := ""
+	for _, e := range list {
+		joined += e.Source + " / " + e.Command + "\n"
+	}
+	for _, want := range []string{
+		"guard.sh", "log.sh",
+		"weather-server --port 8080", // 引数まで見せないと判断できない
+		"ls, go",                     // allowlist も「承認を省く」という判断
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("一覧に %q がない:\n%s", want, joined)
+		}
+	}
+
+	// mapの反復順に左右されず、表示が毎回同じ順になること。
+	for i := range 5 {
+		again := Executables(settings, mcpCfg)
+		if !slices.Equal(again, list) {
+			t.Fatalf("%d回目の順序が違う: %+v", i, again)
+		}
+	}
+}
+
+// 何も実行されない設定なら一覧は空(= 確認プロンプトを出さない)。
+func TestExecutablesEmpty(t *testing.T) {
+	if list := Executables(Settings{}, MCPConfig{}); len(list) != 0 {
+		t.Errorf("空のはず: %+v", list)
 	}
 }
 

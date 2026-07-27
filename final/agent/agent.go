@@ -28,6 +28,9 @@ const (
 	// maxTokensPerTurn は1回のLLM呼び出しの出力上限。
 	maxTokensPerTurn = 8192
 
+	// maxDisplayRunes はツール実行を画面に表示するときの引数の文字数上限。
+	maxDisplayRunes = 120
+
 	// defaultMaxIterations は1ユーザーターン内のLLM往復回数の上限。
 	// LLMがツールを呼び続ける限りループは回るので、暴走(同じ失敗を
 	// 延々と繰り返す等)への保険として上限を置く。上限に達したら
@@ -258,8 +261,14 @@ func (a *Agent) buildParams() anthropic.MessageNewParams {
 	params := anthropic.MessageNewParams{
 		Model:     a.model,
 		MaxTokens: maxTokensPerTurn,
-		System:    []anthropic.TextBlockParam{{Text: a.systemPrompt}},
 		Messages:  a.history,
+	}
+	// システムプロンプトが空のときは System 自体を送らない。
+	// 空のテキストブロックはAPIに拒否される(text の最小長は1)。
+	// 完成形では常に非空だが、章ごとに機能を足していく過程では
+	// システムプロンプトがまだ無い段階がある。
+	if a.systemPrompt != "" {
+		params.System = []anthropic.TextBlockParam{{Text: a.systemPrompt}}
 	}
 	for _, t := range a.tools {
 		schema := t.InputSchema()
@@ -289,7 +298,10 @@ func (a *Agent) CompactHistory(ctx context.Context) error {
 		return nil
 	}
 	fmt.Fprintln(a.out, "(コンテキストを圧縮しています...)")
-	compacted, err := a.ctxmgr.Compact(ctx, a.client, a.model, a.history)
+	// 要約リクエストは通常のターンと同じ形(system・tools付き)で送る。
+	// buildParams() をそのまま渡せば、履歴に tool_use が含まれていても
+	// リクエストとして矛盾しない。
+	compacted, err := a.ctxmgr.Compact(ctx, a.client, a.buildParams())
 	if err != nil {
 		return err
 	}
@@ -326,10 +338,13 @@ func textOf(msg *anthropic.Message) string {
 }
 
 // compactJSON は表示用に入力JSONを1行・短めに整形する。
+//
+// 切るのはバイトではなく文字(ルーン)。日本語を含むツール引数を
+// バイト数で切ると、端末に文字化けが出る。
 func compactJSON(s string) string {
 	s = strings.Join(strings.Fields(s), " ")
-	if len(s) > 120 {
-		s = s[:120] + "..."
+	if r := []rune(s); len(r) > maxDisplayRunes {
+		s = string(r[:maxDisplayRunes]) + "..."
 	}
 	return s
 }

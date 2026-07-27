@@ -20,8 +20,8 @@ type Tool struct {
 }
 
 // Tools はサーバーの全ツールを tools.Tool のリストとして返す。
-func (c *Client) Tools() ([]tools.Tool, error) {
-	infos, err := c.ListTools()
+func (c *Client) Tools(ctx context.Context) ([]tools.Tool, error) {
+	infos, err := c.ListTools(ctx)
 	if err != nil {
 		return nil, err
 	}
@@ -63,5 +63,8 @@ func (t *Tool) InputSchema() tools.Schema {
 }
 
 func (t *Tool) Run(ctx context.Context, input json.RawMessage) (string, error) {
-	return t.client.CallTool(t.info.Name, input)
+	// ツール実行のctxをそのまま渡す。Ctrl-Cやタイムアウトが
+	// MCPサーバーへの問い合わせまで届くのは、この1本の線が
+	// 端から端まで繋がっているからである。
+	return t.client.CallTool(ctx, t.info.Name, input)
 }

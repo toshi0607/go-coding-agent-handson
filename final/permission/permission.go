@@ -54,7 +54,7 @@ type Config struct {
 	// BashAllowlist は承認なしで実行してよいbashコマンド名(先頭単語)。
 	BashAllowlist []string
 	// Ask はユーザーへの確認方法。nil の場合、確認が必要な操作はすべて
-	// 拒否される(サブエージェントなど、人に聞けない文脈で使う)。
+	// 拒否される(テストやバッチ実行など、人に聞けない文脈で使う)。
 	Ask Asker
 }
 
@@ -182,11 +182,17 @@ func commandHead(command string) string {
 	return fields[0]
 }
 
+// maxPromptRunes は確認プロンプトに表示する入力の文字数上限。
+const maxPromptRunes = 200
+
 // summarize は確認プロンプト表示用に入力JSONを整形する。
+//
+// バイト数ではなく文字数で切る。ユーザーが「何を許可するのか」を
+// 読んで判断する画面なので、日本語のパスが文字化けするのは困る。
 func summarize(input json.RawMessage) string {
 	s := string(input)
-	if len(s) > 200 {
-		s = s[:200] + "..."
+	if r := []rune(s); len(r) > maxPromptRunes {
+		s = string(r[:maxPromptRunes]) + "..."
 	}
 	return s
 }

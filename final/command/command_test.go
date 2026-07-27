@@ -9,11 +9,47 @@ import (
 
 func TestIsCommand(t *testing.T) {
 	r := New(t.TempDir())
-	if !r.IsCommand("/help") {
-		t.Error("/help はコマンドと判定されるべき")
+
+	commands := []string{"/help", "/explain main.go", "/my-cmd", "/my_cmd2"}
+	for _, line := range commands {
+		if !r.IsCommand(line) {
+			t.Errorf("コマンドと判定されるべき: %q", line)
+		}
 	}
-	if r.IsCommand("普通の入力") {
-		t.Error("スラッシュで始まらない入力はコマンドではない")
+
+	// スラッシュで始まっていても、コマンド名として妥当でなければ
+	// 通常の入力としてLLMに渡す。絶対パスから始まる依頼が
+	// 「そんなコマンドはありません」で飲み込まれるのを防ぐ。
+	notCommands := []string{
+		"普通の入力",
+		"/Users/foo/main.go を読んで",
+		"/etc/hosts の中身は?",
+		"/",
+		"/ 何か",
+		"/../../etc/passwd",
+	}
+	for _, line := range notCommands {
+		if r.IsCommand(line) {
+			t.Errorf("コマンドではないと判定されるべき: %q", line)
+		}
+	}
+}
+
+// コマンド名はそのままファイルパスに連結される。
+// 検証がないと作業ディレクトリの外を読める。
+func TestExecuteRejectsPathTraversal(t *testing.T) {
+	dir := t.TempDir()
+	secret := filepath.Join(dir, "secret.md")
+	if err := os.WriteFile(secret, []byte("秘密のプロンプト"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	r := New(filepath.Join(dir, "workdir"))
+	for _, name := range []string{"../../secret", "../secret", "/etc/passwd"} {
+		got := r.Execute("/" + name)
+		if got.Prompt != "" {
+			t.Errorf("パストラバーサルでファイルが読まれた: %q → %q", name, got.Prompt)
+		}
 	}
 }
 

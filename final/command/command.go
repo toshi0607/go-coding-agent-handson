@@ -51,8 +51,43 @@ func New(workDir string) *Registry {
 }
 
 // IsCommand は入力がスラッシュコマンドかどうかを判定する。
+//
+// 「/ で始まる」だけでは足りない。ユーザーは
+//
+//	/Users/foo/main.go を読んで
+//
+// のように、絶対パスから始まる依頼を書くことがある。これをコマンド
+// 扱いすると「コマンド /Users/foo/main.go は存在しません」と言われて
+// 依頼がLLMに届かない。コマンド名として妥当な形かどうかまで見る。
 func (r *Registry) IsCommand(line string) bool {
-	return strings.HasPrefix(strings.TrimSpace(line), "/")
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, "/") {
+		return false
+	}
+	name, _, _ := strings.Cut(strings.TrimPrefix(line, "/"), " ")
+	return isValidName(name)
+}
+
+// isValidName はコマンド名として許可する形を定める。
+//
+// 名前はそのままファイルパスの一部になる(.agent/commands/<名前>.md)。
+// 検証せずに連結すると `/../../../etc/passwd` のような入力で
+// 作業ディレクトリの外を読めてしまう。ここは「危険な文字を弾く」のでは
+// なく「安全な文字だけ通す」——ファイル操作の封じ込め(tools.Workspace)と
+// 同じ考え方である。
+func isValidName(name string) bool {
+	if name == "" {
+		return false
+	}
+	for _, r := range name {
+		switch {
+		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
+		case r == '-', r == '_':
+		default:
+			return false
+		}
+	}
+	return true
 }
 
 // Execute はコマンドを実行する。
@@ -67,6 +102,13 @@ func (r *Registry) Execute(line string) Result {
 		return Result{Clear: true, Output: "会話履歴をクリアしました。"}
 	case "compact":
 		return Result{Compact: true}
+	}
+
+	// IsCommand で弾いているはずだが、Execute だけを呼ばれても
+	// 安全であるようにここでも検証する。パスを組み立てる直前が、
+	// 検証を置くべき場所である。
+	if !isValidName(name) {
+		return Result{Output: fmt.Sprintf("コマンド名として使えない文字が含まれています: /%s", name)}
 	}
 
 	// 組み込みになければカスタムコマンドを探す。

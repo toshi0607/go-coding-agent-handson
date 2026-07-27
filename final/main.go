@@ -15,11 +15,14 @@ package main
 import (
 	"bufio"
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"os/signal"
+	"slices"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -61,8 +64,13 @@ func run(oneShot string) error {
 	if err != nil {
 		return err
 	}
+	mcpConfig, err := config.LoadMCPConfig(workDir)
+	if err != nil {
+		return err
+	}
 
 	stdin := bufio.NewReader(os.Stdin)
+	asker := makeAsker(stdin, "[y]es / [n]o / [a]lways")
 
 	// --- ファイル操作の封じ込め ---
 	// ファイル系ツールはこの Workspace 経由でしかパスを解決できない。
@@ -76,6 +84,14 @@ func run(oneShot string) error {
 	// ために「システムプロンプトに書かれた作業ディレクトリ」と
 	// 「実際の封じ込め境界」が食い違う。
 	workDir = ws.Root()
+
+	// --- 設定ファイルの信頼確認 ---
+	// 設定ファイルは読み込み済みだが、まだ何も実行していない。
+	// MCPサーバーの起動もhookの実行もこの先なので、ここが最後の
+	// 引き返せる地点である。
+	if err := confirmTrust(workDir, config.Executables(settings, mcpConfig), makeAsker(stdin, "[y]es / [n]o")); err != nil {
+		return err
+	}
 
 	// --- ツールの組み立て ---
 	// 組み込みツール + スキル + MCPツール + Taskツール(サブエージェント)。
@@ -95,10 +111,7 @@ func run(oneShot string) error {
 		baseTools = append(baseTools, skill.NewTool(skills))
 	}
 
-	mcpTools, closeMCP, err := connectMCPServers(ctx, workDir)
-	if err != nil {
-		return err
-	}
+	mcpTools, closeMCP := connectMCPServers(ctx, mcpConfig)
 	defer closeMCP()
 	baseTools = append(baseTools, mcpTools...)
 
@@ -124,7 +137,19 @@ func run(oneShot string) error {
 			Ask:           ask,
 		})
 	}
-	checker := newChecker(makeAsker(stdin))
+	checker := newChecker(asker)
+
+	// サブエージェント用には別の Checker を作る。ポリシーは同じだが、
+	// 質問の出所を明示する点だけが違う。サブエージェントの出力は
+	// 画面に出していない(下の Out: io.Discard)ので、承認だけが
+	// 文脈なしに現れると、ユーザーは何に答えているのか分からない。
+	//
+	// 「人に聞けないから自動で拒否する」という選択肢もあるが、それだと
+	// サブエージェントは調査しかできなくなる。誰が要求しているかを
+	// 伝えたうえで人間に判断させる方を採った。
+	subChecker := newChecker(func(question string) (string, error) {
+		return asker("(サブエージェントからの要求) " + question)
+	})
 
 	client := llm.NewAnthropicClient()
 	model := defaultModel
@@ -141,17 +166,18 @@ func run(oneShot string) error {
 	hookRunner := hooks.NewRunner(settings.Hooks)
 
 	// --- サブエージェントの組み立て ---
-	// 親と同じツール・権限・hooksを持つが、
+	// 親と同じツール・hooksを持つが、
 	//   - Taskツールは持たない(再帰の禁止)
 	//   - 出力は捨てる(親の表示を汚さない)
-	// という2点だけが違う。
+	//   - 承認の質問に出所を付ける
+	// という3点だけが違う。
 	taskTool := agent.NewTaskTool(func() *agent.Agent {
 		return agent.New(agent.Config{
 			Client:       client,
 			Model:        model,
 			SystemPrompt: systemPrompt,
 			Tools:        baseTools,
-			Permission:   checker,
+			Permission:   subChecker,
 			Hooks:        hookRunner,
 			Out:          io.Discard,
 		})
@@ -161,10 +187,15 @@ func run(oneShot string) error {
 		Client:       client,
 		Model:        model,
 		SystemPrompt: systemPrompt,
-		Tools:        append(baseTools, taskTool),
-		Permission:   checker,
-		Hooks:        hookRunner,
-		Out:          os.Stdout,
+		// append(baseTools, taskTool) と書いてはいけない。baseTools に
+		// 容量の余りがあると、追記先が上のクロージャが参照している
+		// 配列そのものになりうる。今は実害がなくても、あとから
+		// 要素を足したときに黙って壊れる類のバグなので、
+		// 新しいスライスを作る slices.Concat を使う。
+		Tools:      slices.Concat(baseTools, []tools.Tool{taskTool}),
+		Permission: checker,
+		Hooks:      hookRunner,
+		Out:        os.Stdout,
 	})
 
 	if oneShot != "" {
@@ -224,24 +255,70 @@ func repl(ctx context.Context, a *agent.Agent, commands *command.Registry, stdin
 	}
 }
 
+// confirmTrust は「このディレクトリの設定ファイルを信頼してよいか」を
+// 起動時に1度だけ確認する。
+//
+// 設定ファイルは起動時の実行権限そのものである。悪意あるリポジトリは
+// .mcp.json に1行書いておくだけで、clone した人がエージェントを
+// 起動した瞬間に任意のコマンドを走らせられる。中身を見せる機会を
+// 作らずに実行するわけにはいかない。
+//
+// 拒否されたら起動を中止する。hooks を無効化して続行しない理由は、
+// hooks が防御にも使われるからである(example の rm -rf ブロッカーが
+// まさにそれ)。「設定を信頼しないから防御を外して動かす」は本末転倒で、
+// 信頼できない設定のディレクトリでは動かさないのが唯一の安全側である。
+//
+// 実物のエージェントは、一度信頼したディレクトリをユーザー設定に
+// 記録して2回目以降は聞かない。ここでは毎回聞く(永続化する場所を
+// 増やすと、今度はその設定ファイルの信頼が問題になる)。
+func confirmTrust(workDir string, executables []config.Executable, ask permission.Asker) error {
+	if len(executables) == 0 {
+		return nil // 実行されるものが何もないなら聞くことはない
+	}
+
+	var b strings.Builder
+	fmt.Fprintf(&b, "%s の設定ファイルは、次の外部コマンド実行を要求しています:\n", workDir)
+	for _, e := range executables {
+		fmt.Fprintf(&b, "  - %s\n      %s\n", e.Source, e.Command)
+	}
+	b.WriteString("内容を確認しました。このディレクトリの設定を信頼して起動しますか?")
+
+	answer, err := ask(b.String())
+	if err != nil {
+		// 標準入力が繋がっていない(CIなど)場合もここに来る。
+		// 「聞けなかったから通す」は安全機構としてありえないので、
+		// 答えが得られないこと自体を起動の失敗として扱う。
+		return fmt.Errorf("設定を信頼するか確認できませんでした: %w", err)
+	}
+	switch strings.ToLower(strings.TrimSpace(answer)) {
+	case "y", "yes":
+		return nil
+	default:
+		return errors.New("設定を信頼しなかったため起動を中止しました")
+	}
+}
+
 // connectMCPServers は .mcp.json に定義された全サーバーに接続し、
 // ツール一覧を集める。1つのサーバーへの接続失敗は警告に留め、
 // エージェント全体は起動させる。
-func connectMCPServers(ctx context.Context, workDir string) ([]tools.Tool, func(), error) {
-	cfg, err := config.LoadMCPConfig(workDir)
-	if err != nil {
-		return nil, nil, err
-	}
-
+func connectMCPServers(ctx context.Context, cfg config.MCPConfig) ([]tools.Tool, func()) {
 	var allTools []tools.Tool
 	var clients []*mcp.Client
-	for name, server := range cfg.MCPServers {
-		client, err := mcp.Connect(ctx, name, server.Command, server.Args...)
+	for _, name := range slices.Sorted(maps.Keys(cfg.MCPServers)) {
+		server := cfg.MCPServers[name]
+		client, err := mcp.Connect(ctx, mcp.Server{
+			Name:    name,
+			Command: server.Command,
+			Args:    server.Args,
+			// サーバーのログは捨てずに標準エラー出力へ流す。
+			// MCPサーバーが動かないときの手がかりはここにしかない。
+			Stderr: os.Stderr,
+		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "警告: %v\n", err)
 			continue
 		}
-		serverTools, err := client.Tools()
+		serverTools, err := client.Tools(ctx)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "警告: MCPサーバー %s のツール取得に失敗: %v\n", name, err)
 			_ = client.Close()
@@ -256,13 +333,14 @@ func connectMCPServers(ctx context.Context, workDir string) ([]tools.Tool, func(
 			_ = c.Close()
 		}
 	}
-	return allTools, closeAll, nil
+	return allTools, closeAll
 }
 
 // makeAsker は標準入力から承認を得る Asker を作る。
-func makeAsker(stdin *bufio.Reader) permission.Asker {
+// choices は選択肢の表示("[y]es / [n]o" など)。
+func makeAsker(stdin *bufio.Reader, choices string) permission.Asker {
 	return func(question string) (string, error) {
-		fmt.Printf("\n%s\n  [y]es / [n]o / [a]lways > ", question)
+		fmt.Printf("\n%s\n  %s > ", question, choices)
 		answer, err := stdin.ReadString('\n')
 		if err != nil {
 			return "", err

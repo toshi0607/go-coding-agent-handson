@@ -6,6 +6,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/toshi0607/go-coding-agent-handson/final/contextmgr"
 	"github.com/toshi0607/go-coding-agent-handson/final/llm"
 	"github.com/toshi0607/go-coding-agent-handson/final/permission"
@@ -260,6 +261,91 @@ func TestTaskToolRunsSubAgent(t *testing.T) {
 	if !strings.Contains(string(third), "auth/login.go にあります") {
 		t.Errorf("サブエージェントの結論が親に渡っていない: %s", third)
 	}
+}
+
+// compactionを「ターン境界だけ」で行うことの不変条件テスト。
+//
+// ツールループの途中で履歴を要約すると、tool_use に対応する
+// tool_result が要約に飲み込まれ、以降のリクエストがすべてAPIに
+// 拒否される。閾値を極端に下げても、ループの中では圧縮が
+// 走らないことを確認する。
+func TestCompactionHappensOnlyAtTurnBoundary(t *testing.T) {
+	tool := &fakeTool{name: "spin", result: "ツールの結果"}
+	client := llm.NewReplayClient(
+		llm.ToolUseResponse("toolu_1", "spin", `{}`), // 1回目: ツール呼び出し
+		llm.TextResponse("終わりました"),                   // 2回目: ターン終了
+		llm.TextResponse("ここまでの要約"),                  // 3回目: 2ターン目の頭で走る圧縮
+		llm.TextResponse("2ターン目の応答"),
+	)
+	a := New(Config{
+		Client: client, Model: "claude-opus-5",
+		Tools:      []tools.Tool{tool},
+		Permission: allowAll("spin"),
+		// 閾値1 = 1回でも応答を受け取れば「圧縮すべき」状態になる。
+		ContextManager: &contextmgr.Manager{CompactThreshold: 1, MaxToolResultChars: 1000},
+	})
+
+	if _, err := a.Run(context.Background(), "やって"); err != nil {
+		t.Fatal(err)
+	}
+
+	// 1ターン目のLLM呼び出しは2回だけ。間に要約リクエストが
+	// 挟まっていたら3回になる。
+	if n := len(client.Requests()); n != 2 {
+		t.Errorf("ツールループの途中で圧縮が走った: LLM呼び出し%d回", n)
+	}
+	// 検査対象の tool_use が実際に履歴にあること。
+	// これを確認しないと、下の検査が「何も見つからないので合格」に
+	// なっていても気づけない。
+	if n := assertToolUsesAreClosed(t, a.History()); n != 1 {
+		t.Fatalf("履歴に tool_use が1件あるはず: %d件", n)
+	}
+
+	// ターンが終われば圧縮は走る(閾値を超えているので)。
+	if _, err := a.Run(context.Background(), "続けて"); err != nil {
+		t.Fatal(err)
+	}
+	if n := len(client.Requests()); n != 4 {
+		t.Errorf("ターン境界での圧縮が走っていない: LLM呼び出し%d回", n)
+	}
+	assertToolUsesAreClosed(t, a.History())
+}
+
+// assertToolUsesAreClosed は履歴中のすべての tool_use に、
+// 直後のメッセージで対応する tool_result があることを確認し、
+// 検査した tool_use の件数を返す。
+// これが崩れた履歴はAPIに拒否される。
+func assertToolUsesAreClosed(t *testing.T, history []anthropic.MessageParam) int {
+	t.Helper()
+	found := 0
+	for i, msg := range history {
+		var pending []string
+		for _, block := range msg.Content {
+			if block.OfToolUse != nil {
+				pending = append(pending, block.OfToolUse.ID)
+			}
+		}
+		found += len(pending)
+		if len(pending) == 0 {
+			continue
+		}
+		if i+1 >= len(history) {
+			t.Errorf("履歴%d件目の tool_use %v に対応する tool_result がない", i, pending)
+			continue
+		}
+		answered := map[string]bool{}
+		for _, block := range history[i+1].Content {
+			if block.OfToolResult != nil {
+				answered[block.OfToolResult.ToolUseID] = true
+			}
+		}
+		for _, id := range pending {
+			if !answered[id] {
+				t.Errorf("tool_use %s に対応する tool_result がない", id)
+			}
+		}
+	}
+	return found
 }
 
 func TestAutoCompaction(t *testing.T) {
