@@ -6,10 +6,13 @@
 #   1. 構造: 各stepに README.md と hints.md があり、テストを持つ
 #      パッケージにはゲート(step_gate_test.go)がある
 #   2. 穴あきの赤: 各stepは配布状態でビルドと vet が通り、かつ
-#      検証テストは失敗する。テストが通ってしまうstepは課題が
-#      機能していない(穴を埋めなくても正解になっている)
+#      **穴のあるパッケージだけ**が検証テストに失敗する。
+#      「失敗しさえすればよい」ではない——fixtureの欠落やタイムアウトで
+#      落ちていても合格になってしまい、チェッカー自身が壊れていることに
+#      気づけないため、失敗したパッケージの集合と、穴(TODOマーカー)を
+#      含むパッケージの集合が一致することまで見る
 #   3. step 10 = final: step 10 の解答は final そのものなので、
-#      穴のあるファイルを除いて両者はimportパス以外同一であること
+#      穴のある宣言を除いて両者は一致すること(scripts/sync_check.go)
 #
 # 3が効くのは、final にバグ修正を入れて steps に反映し忘れたときである。
 # 実際にカスタムコマンドのシンボリックリンク脱出を修正した際、
@@ -22,7 +25,6 @@ cd "$(dirname "$0")/.."
 
 readonly FINAL_DIR="final"
 readonly LAST_STEP_DIR="steps/10-streaming-hooks"
-readonly MODULE="github.com/toshi0607/go-coding-agent-handson"
 
 failed=0
 
@@ -73,48 +75,55 @@ for dir in steps/*/; do
 		continue
 	fi
 
-	# 検証テストは失敗すること(= 課題が機能している)。
-	if AGENT_STEP_CHECK=1 go test -count=1 "./$dir..." > /dev/null 2>&1; then
-		fail "$step: 穴あき状態で検証テストが通ってしまいます(課題が機能していません)"
-	else
-		ok "$step: ビルド・vetは通り、検証テストは失敗(想定どおり)"
+	# 穴(TODOマーカー)を含むパッケージ = 失敗するはずのパッケージ。
+	marker="TODO(step$num"
+	expected=$(grep -rl "$marker" "$dir" --include='*.go' 2>/dev/null |
+		xargs -n1 dirname | sort -u)
+	if [ -z "$expected" ]; then
+		fail "$step: 穴($marker...)が1つもありません"
+		continue
 	fi
+
+	output=$(AGENT_STEP_CHECK=1 go test -count=1 "./$dir..." 2>&1)
+	if [ $? -eq 0 ]; then
+		fail "$step: 穴あき状態で検証テストが通ってしまいます(課題が機能していません)"
+		continue
+	fi
+
+	# ビルド不能・セットアップ失敗は「課題として正しく失敗している」とは言えない。
+	if echo "$output" | grep -q '\[build failed\]\|\[setup failed\]'; then
+		fail "$step: テストがビルドできずに失敗しています"
+		echo "$output" | grep -m3 '\[build failed\]\|\[setup failed\]' | sed 's/^/      /'
+		continue
+	fi
+
+	# 実際に失敗したパッケージ(FAIL行のimportパスをディレクトリに直す)。
+	actual=$(echo "$output" | awk '/^FAIL\t/ {print $2}' |
+		sed "s|^github.com/toshi0607/go-coding-agent-handson/||" | sort -u)
+
+	# 「失敗した == 穴がある」の一致を見る。ズレは両方向とも問題である:
+	#   穴があるのに落ちない → その課題は埋めなくても正解になっている
+	#   穴がないのに落ちる   → fixture欠落やタイムアウトなど別の理由で
+	#                          落ちており、赤の理由が課題ではない
+	if [ "$expected" != "$actual" ]; then
+		fail "$step: 失敗したパッケージが穴のあるパッケージと一致しません"
+		echo "      穴がある: $(echo "$expected" | tr '\n' ' ')" | sed 's/ $//'
+		echo "      失敗した: $(echo "$actual" | tr '\n' ' ')" | sed 's/ $//'
+		continue
+	fi
+
+	ok "$step: ビルド・vetは通り、穴のある $(echo "$expected" | wc -l | tr -d ' ') パッケージだけが失敗(想定どおり)"
 done
 
 # --- 3. step 10 = final ---
-echo "[3/3] step 10 と final の一致(穴のあるファイルを除く)"
-mismatch=0
-while IFS= read -r final_file; do
-	rel=${final_file#"$FINAL_DIR/"}
-	step_file="$LAST_STEP_DIR/$rel"
-
-	if [ ! -f "$step_file" ]; then
-		fail "step 10 に $rel がありません(final にはあります)"
-		mismatch=1
-		continue
-	fi
-	# 穴のあるファイルは当然中身が違う。
-	if grep -q 'TODO(step10' "$step_file"; then
-		continue
-	fi
-	if ! diff -q <(sed "s|$MODULE/steps/10-streaming-hooks|$MODULE/$FINAL_DIR|g; s|\./steps/10-streaming-hooks|./$FINAL_DIR|g" "$step_file") "$final_file" > /dev/null; then
-		fail "$rel が final と食い違っています(final の修正を step 10 に反映し忘れていませんか)"
-		echo "      diff: sed 's|steps/10-streaming-hooks|final|g' $step_file | diff - $final_file"
-		mismatch=1
-	fi
-done < <(find "$FINAL_DIR" -name '*.go' | sort)
-
-# 逆方向(step 10 にあって final に無いファイル)。ゲートは step 側だけにある。
-while IFS= read -r step_file; do
-	rel=${step_file#"$LAST_STEP_DIR/"}
-	[ "$(basename "$rel")" = "step_gate_test.go" ] && continue
-	if [ ! -f "$FINAL_DIR/$rel" ]; then
-		fail "final に $rel がありません(step 10 にはあります)"
-		mismatch=1
-	fi
-done < <(find "$LAST_STEP_DIR" -name '*.go' | sort)
-
-[ "$mismatch" -eq 0 ] && ok "step 10 は final と一致しています(穴を除く)"
+#
+# ファイル単位ではなくトップレベル宣言の単位で比較する。穴のあるファイルを
+# 丸ごと除外すると、同じファイルにある他の関数(hooks.go の RunPost など)の
+# 食い違いを見逃すためである。詳細は scripts/sync_check.go を参照。
+echo "[3/3] step 10 と final の一致(穴のある宣言を除く)"
+if ! go run scripts/sync_check.go "$FINAL_DIR" "$LAST_STEP_DIR" 'TODO(step10'; then
+	failed=1
+fi
 
 if [ "$failed" -ne 0 ]; then
 	echo
