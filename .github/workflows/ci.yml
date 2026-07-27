@@ -1,0 +1,48 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: build / vet / test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          # Goのバージョンは go.mod を唯一の情報源にする(二重管理を避ける)。
+          go-version-file: go.mod
+          cache: true
+
+      - name: gofmt
+        run: |
+          unformatted=$(gofmt -l .)
+          if [ -n "$unformatted" ]; then
+            echo "gofmt が未適用のファイルがあります:"
+            echo "$unformatted"
+            exit 1
+          fi
+
+      - name: go mod tidy -diff
+        run: go mod tidy -diff
+
+      - run: go build ./...
+
+      - run: go vet ./...
+
+      # APIキーなしで全テストが通ることは、この教材の設計上の要件である
+      # (README「テスト」の節)。CIにキーを置かないこと自体がその検証になる。
+      - name: go test
+        run: go test -race -count=1 ./...
+
+      # 教材としての不変条件(穴あきstepが赤であること、step 10 = final など)。
+      # 詳細は scripts/check-steps.sh のコメントを参照。
+      - name: 教材の不変条件
+        run: make check-steps
