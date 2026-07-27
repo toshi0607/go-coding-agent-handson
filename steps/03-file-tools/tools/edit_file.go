@@ -5,9 +5,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"os"
-	"path/filepath"
-	"strings"
 )
 
 // EditFile はファイルを編集するツール。これが入ると
@@ -59,36 +56,24 @@ func (e *EditFile) Run(ctx context.Context, input json.RawMessage) (string, erro
 	if in.OldStr == in.NewStr {
 		return "", errors.New("old_str と new_str が同じです")
 	}
-	path := filepath.Join(e.workDir, in.Path)
-
-	data, err := os.ReadFile(path)
-	switch {
-	case errors.Is(err, os.ErrNotExist) && in.OldStr == "":
-		// 新規作成: old_str が空 かつ ファイルが存在しない場合のみ。
-		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
-			return "", err
-		}
-		if err := os.WriteFile(path, []byte(in.NewStr), 0o644); err != nil {
-			return "", err
-		}
-		return fmt.Sprintf("%s を新規作成しました", in.Path), nil
-	case err != nil:
-		return "", err
-	}
-
-	content := string(data)
-	switch n := strings.Count(content, in.OldStr); {
-	case in.OldStr == "":
-		return "", fmt.Errorf("%s は既に存在します。編集するには old_str を指定してください", in.Path)
-	case n == 0:
-		return "", errors.New("old_str がファイル内に見つかりません。read_file で最新の内容を確認してください")
-	case n > 1:
-		return "", fmt.Errorf("old_str がファイル内に %d 回出現します。前後の文脈を含めて一意にしてください", n)
-	}
-
-	updated := strings.Replace(content, in.OldStr, in.NewStr, 1)
-	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
-		return "", err
-	}
-	return fmt.Sprintf("%s を編集しました", in.Path), nil
+	// TODO(step03-1): 編集の本体を実装する。実際のパスは
+	// filepath.Join(e.workDir, in.Path) で組み立てる。満たすべき仕様:
+	//
+	//  - old_str が空 かつ path が存在しない → 新規作成。
+	//    親ディレクトリごと作る(os.MkdirAll + os.WriteFile)
+	//  - old_str が空 かつ path が存在する → エラー。
+	//    「新規作成のつもり」の指定で既存ファイルを黙って上書きさせない
+	//  - old_str がファイル内に見つからない(0回)→ エラー
+	//  - old_str が複数回出現する → エラー。どこを置き換えるか曖昧なまま
+	//    書き換えるより、LLMに引用を長くしてもらう方が安全である
+	//  - ちょうど1回 → その1箇所だけ置き換えて保存する
+	//
+	// エラーメッセージはLLMへのフィードバックである。「見つからないなら
+	// read_file で確認し直す」「複数あるなら文脈を長くする」のように、
+	// LLMが次の一手を選べる内容にすること。
+	//
+	// ヒント: strings.Count / strings.Replace(n=1)。
+	// 「存在しない」の判定は errors.Is(err, os.ErrNotExist)。
+	// 必要な import(os, path/filepath, strings)は自分で足すこと。
+	panic("TODO(step03-1): steps/03-file-tools/tools/edit_file.go を実装してください(hints.md 参照)")
 }

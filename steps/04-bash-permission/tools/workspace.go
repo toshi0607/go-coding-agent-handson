@@ -6,7 +6,6 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"strings"
 )
 
 // Workspace はファイル操作を許可するディレクトリ(作業ディレクトリ)を表す。
@@ -79,38 +78,36 @@ func (w *Workspace) Resolve(path string) (string, error) {
 		path = "."
 	}
 
-	// 相対パスは作業ディレクトリ基準。絶対パスもいったん受け入れて、
-	// 最後の封じ込め判定に委ねる(作業ディレクトリ内の絶対パスは正当)。
-	abs := path
-	if !filepath.IsAbs(abs) {
-		abs = filepath.Join(w.root, abs)
-	}
-	abs = filepath.Clean(abs)
-
-	resolved, err := evalSymlinksLenient(abs)
-	if err != nil {
-		return "", err
-	}
-
-	if !w.contains(resolved) {
-		return "", fmt.Errorf("パス %s は作業ディレクトリ(%s)の外を指しています。作業ディレクトリ内のパスを指定してください", path, w.root)
-	}
-	return resolved, nil
+	// TODO(step04-3): パスの検証と解決を実装する。手順:
+	//
+	//  1. 相対パスは作業ディレクトリ(w.root)基準の絶対パスにする
+	//     (filepath.IsAbs / filepath.Join)。絶対パスもここでは弾かず、
+	//     いったん受け入れて最後の封じ込め判定に委ねる——作業ディレクトリ
+	//     「内」を指す絶対パスは正当だからである
+	//  2. filepath.Clean で正規化する
+	//  3. evalSymlinksLenient(実装済みのヘルパー)でシンボリックリンクを
+	//     解決する。".." の正規化だけではリンク経由の脱出を検出できない。
+	//     文字列処理とファイルシステムへの問い合わせの違いは README を参照
+	//  4. 解決後のパスが作業ディレクトリの内側か contains で判定し、
+	//     外なら「どのパスが、なぜダメか」が分かるエラーを返す
+	panic("TODO(step04-3): steps/04-bash-permission/tools/workspace.go を実装してください(hints.md 参照)")
 }
 
 // contains は path が作業ディレクトリの内側かを判定する。
 //
-// strings.HasPrefix(path, root) だけでは不十分である。
-// root が "/home/me/app" のとき "/home/me/app-secrets" が前方一致で
-// 通ってしまう。filepath.Rel を使えば、区切り文字の扱いも
-// root が "/" のような特殊ケースもまとめて正しく処理できる。
+// TODO(step04-4): 実装する。
+//
+// 真っ先に思いつくのは strings.HasPrefix(path, w.root) だが、これは
+// 不十分である。root が "/home/me/app" のとき "/home/me/app-secrets" が
+// 前方一致で通ってしまう(検証テストがこのケースを突いてくる)。
+// また root に区切り文字を足して比較する方式は、root が "/" のときに
+// "//" になって内側を全部拒否する。
+//
+// filepath.Rel で root からの相対パスを計算し、その形で判定すると、
+// 区切り文字の扱いも特殊ケースもまとめて正しく処理できる。
+// 「rel がどんな形なら外側と言えるか」を考えること。
 func (w *Workspace) contains(path string) bool {
-	rel, err := filepath.Rel(w.root, path)
-	if err != nil {
-		return false
-	}
-	// rel が ".." で始まるなら root の外を指している。
-	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)))
+	panic("TODO(step04-4): steps/04-bash-permission/tools/workspace.go を実装してください(hints.md 参照)")
 }
 
 // maxSymlinkHops は壊れたシンボリックリンクを辿る回数の上限。

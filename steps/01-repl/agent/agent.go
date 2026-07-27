@@ -55,8 +55,12 @@ func New(cfg Config) *Agent {
 // Run は1ユーザーターンを処理する。ユーザー入力を履歴に積んでLLMを呼び、
 // 応答を表示し、応答も履歴に積んで返す。
 func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
-	// ユーザー入力を user メッセージとして履歴に積む。
-	a.history = append(a.history, anthropic.NewUserMessage(anthropic.NewTextBlock(userInput)))
+	// TODO(step01-1): ユーザー入力を user メッセージとして
+	// 履歴(a.history)の末尾に積む。
+	//
+	// リクエストに載せるメッセージの組み立てには、SDKのヘルパー
+	// (anthropic.NewUserMessage / anthropic.NewTextBlock)が使える。
+	// 詰まったら hints.md のヒント1へ。
 
 	resp, err := a.client.Complete(ctx, a.buildParams())
 	if err != nil {
@@ -64,10 +68,11 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 	}
 	fmt.Fprintln(a.out, textOf(resp))
 
-	// アシスタントの応答も履歴に積む。これを忘れると、次のターンの
-	// リクエストに「LLM自身の前回の発言」が含まれず、LLMは自分が
-	// 何を答えたか知らないまま会話を続けることになる。
-	a.history = append(a.history, resp.ToParam())
+	// TODO(step01-2): アシスタントの応答(resp)も履歴に積む。
+	//
+	// これを忘れてもコンパイルは通り、1ターン目は普通に動く。何が
+	// 壊れるかは検証テスト(TestHistoryCarriesAcrossTurns)が教えて
+	// くれる。resp を履歴に積める形に変換する方法は hints.md のヒント2へ。
 
 	return textOf(resp), nil
 }

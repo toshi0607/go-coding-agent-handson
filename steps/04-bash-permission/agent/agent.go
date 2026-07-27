@@ -183,10 +183,15 @@ func (a *Agent) executeTool(ctx context.Context, block anthropic.ContentBlockUni
 		return anthropic.NewToolResultBlock(block.ID, fmt.Sprintf("ツール %s は存在しません", block.Name), true)
 	}
 
-	if err := a.perm.Check(block.Name, block.Input); err != nil {
-		fmt.Fprintf(a.out, "  ⨯ %v\n", err)
-		return anthropic.NewToolResultBlock(block.ID, err.Error(), true)
-	}
+	// TODO(step04-5): ツールを実行する「前」に権限チェックを差し込む。
+	//
+	// a.perm.Check(block.Name, block.Input) がエラーを返したら、ツールを
+	// 実行せずに、そのエラーを is_error 付きの tool_result として返す。
+	// エージェント自体は止めないこと——拒否はLLMへのフィードバックであり、
+	// LLMは「拒否された」ことを知って初めて別の方法を検討できる。
+	//
+	// チェックをツール側(各ツールの Run の中)ではなくループ側に置く
+	// 理由は README を参照。
 
 	result, err := tool.Run(ctx, block.Input)
 	if err != nil {

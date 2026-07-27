@@ -224,45 +224,26 @@ func (c *Client) call(ctx context.Context, method string, params any, result any
 		return err
 	}
 
-	// 自分のリクエストIDに対する応答が来るまで読む。
-	// サーバーは通知(IDなしのメッセージ)を勝手に送ってくることが
-	// あるので、それらは読み飛ばす。
+	// TODO(step08-1): 自分のリクエスト(id)に対する応答が来るまで
+	// c.lines を読み続けるループを実装する。満たすべき仕様:
 	//
-	// IDで突き合わせているおかげで、タイムアウトで諦めたリクエストの
-	// 応答が後から届いても実害がない——次の call が「自分宛てでない」
-	// として読み飛ばす。IDを見ずに「次に来た1行」を答えとみなす
-	// 実装だと、一度タイムアウトしただけで以降ずっと1つずつ
-	// ずれた応答を読み続けることになる。
-	for {
-		select {
-		case <-ctx.Done():
-			return fmt.Errorf("MCPサーバー %s が %s に応答しません: %w", c.serverName, method, ctx.Err())
-		case msg, ok := <-c.lines:
-			if !ok {
-				return fmt.Errorf("MCPサーバー %s との接続が切れました", c.serverName)
-			}
-			if msg.err != nil {
-				return msg.err
-			}
-			if len(msg.line) == 0 {
-				continue
-			}
-			var resp response
-			if err := json.Unmarshal(msg.line, &resp); err != nil {
-				return fmt.Errorf("MCPレスポンスのパースに失敗: %w", err)
-			}
-			if resp.ID == nil || *resp.ID != id {
-				continue // 通知や別リクエストへの応答
-			}
-			if resp.Error != nil {
-				return resp.Error
-			}
-			if result != nil {
-				return json.Unmarshal(resp.Result, result)
-			}
-			return nil
-		}
-	}
+	//  - ctx.Done() と c.lines の select で待つ。ctx が切れたら
+	//    「どのサーバーの何が応答しないか」が分かるエラーを返す。
+	//    ここが無期限待ちだと、応答しないサーバー1つでエージェント全体が
+	//    無言で固まる(ユーザーにはCtrl-Cしか残らない)
+	//  - c.lines が閉じられていたら(受信の ok が false)、接続が
+	//    切れたことが分かるエラーを返す
+	//  - msg.err が入っていたらそれを返す。空行は読み飛ばす
+	//  - 1行を response としてパースし、次のものは読み飛ばして待ち続ける:
+	//      - ID の無いメッセージ(サーバーが勝手に送ってくる通知)
+	//      - 自分の id と違う応答(タイムアウトで諦めた過去のリクエストへの
+	//        応答が、後から届くことがある)
+	//    ID を見ずに「次に来た1行」を答えとみなすと、一度タイムアウト
+	//    しただけで以降ずっと1つずつずれた応答を読み続けることになる
+	//  - resp.Error が入っていたらそれを返す
+	//  - 自分宛ての正常応答なら、result が非nilのとき resp.Result を
+	//    json.Unmarshal してから nil を返す
+	panic("TODO(step08-1): steps/08-mcp/mcp/client.go を実装してください(hints.md 参照)")
 }
 
 // send はメッセージを1行のJSONとして書き込む(改行区切りフレーミング)。

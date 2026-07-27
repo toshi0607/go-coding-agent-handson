@@ -44,9 +44,10 @@ func TestTruncateToolResultKeepsUTF8Intact(t *testing.T) {
 	if !utf8.ValidString(got) {
 		t.Errorf("UTF-8が壊れている: %q", got)
 	}
-	// 告知の数字も文字数であること(バイト数の90ではない)。
-	if !strings.Contains(got, "全体は 30 文字") {
-		t.Errorf("全体の文字数がバイト数になっている: %q", got)
+	// 告知に含める「全体の長さ」も文字数であること。
+	// バイト数で数えると 90 になる(1文字3バイト × 30文字)。
+	if !strings.Contains(got, "30") || strings.Contains(got, "90") {
+		t.Errorf("全体の文字数(30)がバイト数(90)になっている: %q", got)
 	}
 
 	// ちょうど上限ぴったりのときは切り詰めない。

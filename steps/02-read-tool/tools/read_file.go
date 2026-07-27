@@ -3,9 +3,6 @@ package tools
 import (
 	"context"
 	"encoding/json"
-	"fmt"
-	"os"
-	"path/filepath"
 )
 
 // ReadFile はファイルの中身を読むツール。
@@ -40,17 +37,17 @@ func (*ReadFile) InputSchema() Schema {
 }
 
 func (r *ReadFile) Run(ctx context.Context, input json.RawMessage) (string, error) {
-	var in struct {
-		Path string `json:"path"`
-	}
-	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("入力のパースに失敗: %w", err)
-	}
-	data, err := os.ReadFile(filepath.Join(r.workDir, in.Path))
-	if err != nil {
-		// エラーメッセージはそのままLLMに返る。LLMはこれを読んで
-		// パスを修正したり list_files で探し直したりできる。
-		return "", err
-	}
-	return string(data), nil
+	// TODO(step02-1): ツールの実行本体を実装する(ウォームアップ)。
+	//
+	//  1. input(LLMが生成した引数のJSON)から path を取り出す。
+	//     `json:"path"` タグを付けた無名structにUnmarshalするのがGoの定石
+	//  2. filepath.Join(r.workDir, path) でパスを組み立てる
+	//  3. os.ReadFile で読んで中身を返す
+	//
+	// 読み取りに失敗したときのエラーはそのまま返してよい。エラーは
+	// エージェント側で tool_result としてLLMに返され、LLMはそれを
+	// 読んでパスを修正するなど、次の一手を考えられる。
+	//
+	// 必要な import(os, path/filepath など)は自分で足すこと。
+	panic("TODO(step02-1): steps/02-read-tool/tools/read_file.go を実装してください(hints.md 参照)")
 }

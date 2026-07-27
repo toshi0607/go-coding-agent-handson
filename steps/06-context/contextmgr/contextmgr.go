@@ -49,43 +49,38 @@ func NewManager() *Manager {
 
 // TruncateToolResult はツール結果が長すぎる場合に切り詰める。
 //
-// 戦略は「先頭を残して後ろを捨てる」。エラーメッセージやファイルの
-// 重要情報は先頭に現れることが多いためだが、これは唯一の正解ではない。
-// テストログは末尾にこそ結果が出るので「先頭+末尾を残す」戦略もありうるし、
-// 実際のエージェントには要約をかけるものもある。何をどう捨てるかは
-// エージェント設計の立派な判断ポイントである。
+// TODO(step06-1): 実装する。満たすべき仕様:
 //
-// 切り詰めたことは必ずLLMに伝える。黙って切ると、LLMは「全部読めた」と
-// 誤解したまま推論を進めてしまう。
-//
-// 数えるのはバイトではなく文字(ルーン)である。Goの文字列はUTF-8の
-// バイト列なので `result[:20000]` と書くと日本語やソースコード中の
-// マルチバイト文字の途中で切れ、壊れたバイトがそのままAPIに送られる。
-// 「文字数で切り詰めた」と言いながらバイト数で切るのは、日本語を
-// 扱うツールでは実害のある嘘になる。
+//  - MaxToolResultChars 文字以内ならそのまま返す
+//  - 超えていたら「先頭 MaxToolResultChars 文字」を残して後ろを捨てる。
+//    エラーメッセージやファイルの重要情報は先頭に現れることが多い
+//    ためだが、これは唯一の正解ではない。テストログは末尾にこそ結果が
+//    出るので「先頭+末尾を残す」戦略もありうるし、実際のエージェントには
+//    要約をかけるものもある。何をどう捨てるかは設計の立派な判断ポイントだ
+//  - 切り詰めたことと全体の長さを、切り詰めた結果の末尾に書き足して
+//    LLMに必ず伝える。黙って切ると、LLMは「全部読めた」と誤解した
+//    まま推論を進めてしまう
+//  - 数えるのはバイトではなく文字(ルーン)。下の truncateRunes を
+//    実装して使うこと
 func (m *Manager) TruncateToolResult(result string) string {
-	head, total := truncateRunes(result, m.MaxToolResultChars)
-	if total <= m.MaxToolResultChars {
-		return result
-	}
-	return head +
-		fmt.Sprintf("\n... (長すぎるため %d 文字で切り詰めました。全体は %d 文字あります。続きが必要なら範囲を絞って取得してください)", m.MaxToolResultChars, total)
+	panic("TODO(step06-1): steps/06-context/contextmgr/contextmgr.go を実装してください(hints.md 参照)")
 }
 
 // truncateRunes は s の先頭 max 文字と、s 全体の文字数を返す。
 //
-// []rune への変換ではなく range で走査しているのは、ツール結果が
-// 数MBになりうるため。range over string はルーンの開始バイト位置を
-// 返すので、そこで切ればバイト境界とルーン境界が一致する。
+// TODO(step06-1続き): 実装する。
+//
+// Goの文字列はUTF-8のバイト列である。`s[:20000]` と書くと日本語や
+// ソースコード中のマルチバイト文字の途中で切れ、壊れたバイト列が
+// そのままAPIに送られる。「N文字で切り詰めた」と告知しながらバイト数で
+// 切るのは、日本語を扱うツールでは実害のある嘘になる。
+//
+// []rune(s) に変換すれば文字単位で切れるが、ツール結果は数MBに
+// なりうるので全体の変換コピーは避けたい。range over string が
+// 「ルーンの開始バイト位置」を返すことを利用すると、コピーなしで
+// バイト境界とルーン境界を一致させられる。
 func truncateRunes(s string, max int) (head string, total int) {
-	head = s
-	for i := range s {
-		if total == max {
-			head = s[:i]
-		}
-		total++
-	}
-	return head, total
+	panic("TODO(step06-1続き): steps/06-context/contextmgr/contextmgr.go を実装してください(hints.md 参照)")
 }
 
 // ShouldCompact は直近のAPIレスポンスのトークン使用量から、

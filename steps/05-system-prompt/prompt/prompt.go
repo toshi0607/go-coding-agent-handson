@@ -11,12 +11,7 @@
 package prompt
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
-	"runtime"
 	"strings"
-	"time"
 )
 
 // MemoryFileName はプロジェクトメモリのファイル名。
@@ -42,24 +37,28 @@ func Build(opts Options) string {
 	var b strings.Builder
 	b.WriteString(basePrompt)
 
-	fmt.Fprintf(&b, `
+	// TODO(step05-1): 環境情報を追記する。
+	//
+	// LLMは実行環境を何も知らない。作業ディレクトリ(opts.WorkDir)、
+	// OS(runtime.GOOS)、今日の日付(time.Now())あたりを教えて
+	// おかないと、「あなたの環境によります」のような答えしか返せないし、
+	// ツールに渡すパスの推測も外れやすくなる。
+	//
+	// 日付のフォーマットは time.Time.Format を使う(Goでは
+	// "2006-01-02" というレイアウト文字列で書式を指定する)。
 
-環境情報:
-- 作業ディレクトリ: %s
-- OS: %s
-- 今日の日付: %s`,
-		opts.WorkDir, runtime.GOOS, time.Now().Format("2006-01-02"))
-
-	// CLAUDE.md があれば「プロジェクトメモリ」として全文を注入する。
-	// なければ何も足さない(存在しないセクションでプロンプトを汚さない)。
-	memory, err := os.ReadFile(filepath.Join(opts.WorkDir, MemoryFileName))
-	if err == nil && len(memory) > 0 {
-		fmt.Fprintf(&b, `
-
-プロジェクトメモリ(%s):
-このプロジェクトで作業する際は、以下の内容に従ってください。
-%s`, MemoryFileName, string(memory))
-	}
+	// TODO(step05-2): プロジェクトメモリ(CLAUDE.md)を注入する。
+	//
+	// opts.WorkDir 直下の CLAUDE.md(MemoryFileName 定数)を読み、
+	// 存在して中身があれば「プロジェクトメモリ」として全文を追記する。
+	// このとき、これが何のセクションで、どう扱うべきものかの説明も
+	// 添えること(ただのテキスト片を貼るだけでは、LLMはそれが
+	// 「従うべき規約」だと分からない)。
+	//
+	// ファイルが無い・読めない場合は何も足さない。存在しない
+	// セクションの見出しだけ残すような形でプロンプトを汚さないこと。
+	//
+	// 必要な import(fmt, os, path/filepath, runtime, time)は自分で足すこと。
 
 	return b.String()
 }

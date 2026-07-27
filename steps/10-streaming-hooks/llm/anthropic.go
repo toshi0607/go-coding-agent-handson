@@ -30,28 +30,21 @@ func (c *AnthropicClient) Stream(ctx context.Context, params anthropic.MessageNe
 	stream := c.client.Messages.NewStreaming(ctx, params)
 	defer stream.Close()
 
-	// ストリーミングではレスポンスがイベントの列に分解されて届く。
+	// TODO(step10-1): ストリーミングの受信処理を実装する。
+	//
+	// ストリーミングではレスポンスが SSE イベントの列に分解されて届く:
 	// message_start → content_block_start → content_block_delta... → message_stop
-	// Accumulate がイベントを完全な Message に組み立て直してくれるので、
-	// こちらはテキスト差分(text_delta)を表示に流すことだけ考えればよい。
-	message := anthropic.Message{}
-	for stream.Next() {
-		event := stream.Current()
-		if err := message.Accumulate(event); err != nil {
-			return nil, err
-		}
-		if onText == nil {
-			continue
-		}
-		switch eventVariant := event.AsAny().(type) {
-		case anthropic.ContentBlockDeltaEvent:
-			if delta, ok := eventVariant.Delta.AsAny().(anthropic.TextDelta); ok {
-				onText(delta.Text)
-			}
-		}
-	}
-	if err := stream.Err(); err != nil {
-		return nil, err
-	}
-	return &message, nil
+	//
+	// 満たすべき仕様:
+	//  - stream.Next() で回し、各イベント(stream.Current())を
+	//    anthropic.Message に蓄積する。SDKの Message.Accumulate が
+	//    イベントから完全なメッセージを組み立て直してくれる
+	//  - テキストの差分が届いたら onText に流す(onText は nil でもよい)。
+	//    イベントが ContentBlockDeltaEvent で、その Delta が TextDelta の
+	//    ときだけがテキスト差分である(AsAny() で型を判別できる。
+	//    ツール引数の断片 input_json_delta などは流さない)
+	//  - ループ後に stream.Err() を確認する
+	//  - 蓄積した完全な Message を返す。会話履歴に積むのはこの戻り値で、
+	//    onText はあくまで表示用——という役割分担が肝である
+	panic("TODO(step10-1): steps/10-streaming-hooks/llm/anthropic.go を実装してください(hints.md 参照)")
 }

@@ -115,15 +115,16 @@ func New(cfg Config) *Agent {
 // Run は1ユーザーターンを処理する。ツール実行を挟みながらLLMとの
 // 往復を繰り返し、最終的なテキスト応答を返す。
 func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
-	// compactionはターンの開始時、つまり会話が一区切りついた地点で行う。
-	// ツールループの途中で履歴を要約すると、tool_use と tool_result の
-	// 対応が壊れてAPIエラーになるため、「どこでcompactするか」は
-	// 見た目以上に重要な判断である。
-	if a.ctxmgr.ShouldCompact(a.lastUsageTokens) {
-		if err := a.CompactHistory(ctx); err != nil {
-			return "", err
-		}
-	}
+	// TODO(step06-2): 自動compactionを発動させる。
+	//
+	// 直近のトークン使用量(a.lastUsageTokens)が閾値を超えていたら
+	// (a.ctxmgr.ShouldCompact)、履歴を圧縮する(a.CompactHistory。
+	// エラーはそのまま返してよい)。
+	//
+	// このstepの主題は「圧縮のコードを書くこと」ではなく「どこで
+	// 圧縮するか」である。この位置(ターンの開始時)以外——たとえば
+	// 下のツールループの中——で圧縮すると何が壊れるかは README と
+	// TestCompactionHappensOnlyAtTurnBoundary を参照。
 
 	a.history = append(a.history, anthropic.NewUserMessage(anthropic.NewTextBlock(userInput)))
 

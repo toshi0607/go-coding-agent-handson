@@ -106,29 +106,23 @@ func (c *Checker) checkBash(input json.RawMessage) error {
 	if err := json.Unmarshal(input, &in); err != nil {
 		return fmt.Errorf("bashの入力をパースできません: %w", err)
 	}
-	head := commandHead(in.Command)
 
-	// 単純なコマンドでなければ allowlist を適用しない。
+	// TODO(step04-2): allowlist の判定を実装する。満たすべき仕様:
 	//
-	// ここは allowlist 方式の最大の落とし穴である。先頭単語だけ見て
-	// 許可すると、`ls; rm -rf /` も `ls\nrm -rf /` も `echo x > ~/.ssh/authorized_keys`
-	// も「先頭は ls / echo だから安全」と誤判定してしまう。
-	// シェルの構文は区切り文字・改行・リダイレクト・置換と多様で、
-	// 「危険な形を列挙して弾く」(ブラックリスト)は必ず漏れる。
+	//  - コマンドが「単純な1コマンド」(isSimpleCommand)でなければ、
+	//    allowlist を適用せず、必ずユーザー確認(c.confirm)に回す。
+	//    先頭単語だけ見て許可すると `ls; rm -rf /` も「先頭は ls だから
+	//    安全」になってしまう——なぜ判定の順番が命なのかは README を参照
+	//  - 単純なコマンドで、先頭単語(commandHead)が allowlist にあるか、
+	//    セッション中に "a" で許可済み(c.sessionAllowed["bash:"+先頭単語])
+	//    なら、確認なしで許可する
+	//  - それ以外は c.confirm で確認する。sessionKey は "bash:"+先頭単語
+	//    (「a」で同じコマンドの再確認をスキップできるように)
 	//
-	// そこで判定を反転し、「安全と言い切れる形だけを通す」
-	// (ホワイトリスト)にする。1コマンド・1行・シェルのメタ文字なし。
-	// それ以外は先頭単語が何であれユーザー確認に回す。
-	if !isSimpleCommand(in.Command) {
-		question := fmt.Sprintf("シェルのメタ文字を含むコマンドの実行を許可しますか?\n  $ %s", in.Command)
-		return c.confirm(question, "", "コマンド")
-	}
-
-	if c.bashAllowlist[head] || c.sessionAllowed["bash:"+head] {
-		return nil
-	}
-	question := fmt.Sprintf("コマンドの実行を許可しますか?\n  $ %s", in.Command)
-	return c.confirm(question, "bash:"+head, "コマンド")
+	// c.confirm(question, sessionKey, "コマンド") の question には
+	// 実行しようとしているコマンド文字列そのものを含めること。
+	// ユーザーは表示された内容だけを根拠に判断する。
+	panic("TODO(step04-2): steps/04-bash-permission/permission/permission.go を実装してください(hints.md 参照)")
 }
 
 // confirm はユーザーに確認する。sessionKey が空でなく回答が "a" なら
@@ -156,21 +150,24 @@ func (c *Checker) confirm(question, sessionKey, kind string) error {
 }
 
 // isSimpleCommand はコマンドが「1つのコマンド呼び出しだけ」であることを
-// 保証できる形かを判定する。許可するのは英数字と、パス・オプションに
-// 現れるごく限られた記号のみ。改行・リダイレクト・パイプ・変数展開・
-// クォート・ワイルドカードはすべて「単純でない」と判定する。
+// 保証できる形かを判定する。
+//
+// TODO(step04-1): 実装する。設計方針:
+//
+// 「危険な文字(; | > など)を列挙して弾く」(ブラックリスト)を
+// 考えたくなるが、その方向は必ず漏れる。シェルの構文は区切り文字・
+// 改行・リダイレクト・コマンド置換・クォート・変数展開と多様で、
+// 危険な形を全部列挙し切ることは現実的にできない。
+//
+// 判定を反転し、「安全と言い切れる文字だけを通す」(ホワイトリスト)に
+// すること。通してよいのは英数字と、パスやオプションに現れるごく
+// 限られた記号(スペース - _ . / = : , + @)だけ。それ以外の文字が
+// 1つでも含まれていたら false(マルチバイト文字も安全側に倒す)。
+//
+// 検証テスト(TestBashAllowlistCannotBeBypassed)は13種類のバイパスを
+// 試してくる。ブラックリストで書くと、どれかが必ずすり抜ける。
 func isSimpleCommand(command string) bool {
-	for _, r := range command {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
-		case r == ' ', r == '-', r == '_', r == '.', r == '/', r == '=', r == ':', r == ',', r == '+', r == '@':
-		default:
-			// マルチバイト文字(日本語のファイル名など)もここに落ちる。
-			// 安全側に倒して確認に回す。
-			return false
-		}
-	}
-	return true
+	panic("TODO(step04-1): steps/04-bash-permission/permission/permission.go を実装してください(hints.md 参照)")
 }
 
 // commandHead はコマンド文字列の先頭単語を返す。

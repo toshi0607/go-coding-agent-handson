@@ -70,24 +70,23 @@ func (r *Registry) IsCommand(line string) bool {
 
 // isValidName はコマンド名として許可する形を定める。
 //
+// TODO(step09-2): 実装する。
+//
 // 名前はそのままファイルパスの一部になる(.agent/commands/<名前>.md)。
 // 検証せずに連結すると `/../../../etc/passwd` のような入力で
-// 作業ディレクトリの外を読めてしまう。ここは「危険な文字を弾く」のでは
-// なく「安全な文字だけ通す」——ファイル操作の封じ込め(tools.Workspace)と
-// 同じ考え方である。
+// 作業ディレクトリの外を読めてしまう。
+//
+// もう1つの罠は「/ で始まる入力は全部コマンド」という判定である。
+// ユーザーは「/Users/foo/main.go を読んで」のように絶対パスから始まる
+// 依頼を普通に書く。これをコマンド扱いすると「コマンド /Users/foo/main.go は
+// 存在しません」と言われ、依頼がLLMに届かない。
+//
+// 対策はどちらも同じで、「危険な文字を弾く」のではなく「コマンド名として
+// 安全な文字(英数字と - _)だけを通す」。ファイル操作の封じ込め
+// (tools.Workspace)や bash の isSimpleCommand と同じ考え方である。
+// 空文字も false にすること。
 func isValidName(name string) bool {
-	if name == "" {
-		return false
-	}
-	for _, r := range name {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
-		case r == '-', r == '_':
-		default:
-			return false
-		}
-	}
-	return true
+	panic("TODO(step09-2): steps/09-commands-skills/command/command.go を実装してください(hints.md 参照)")
 }
 
 // Execute はコマンドを実行する。

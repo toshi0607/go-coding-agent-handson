@@ -18,7 +18,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
-	"fmt"
 	"os/exec"
 	"time"
 )
@@ -60,38 +59,33 @@ func NewRunner(config Config) *Runner {
 	return &Runner{config: config}
 }
 
-// RunPre はPreToolUseフックを実行する。いずれかのhookが終了コード2を
-// 返したら error を返し、呼び出し側はツール実行を中止する。
+// RunPre はPreToolUseフックを実行する。いずれかのhookがブロックを
+// 表明したら error を返し、呼び出し側はツール実行を中止する。
 func (r *Runner) RunPre(ctx context.Context, toolName string, input json.RawMessage) error {
 	for _, h := range r.config["PreToolUse"] {
 		if !matches(h.Matcher, toolName) {
 			continue
 		}
-		p := payload{HookEventName: "PreToolUse", ToolName: toolName, ToolInput: input}
-		stderr, exitCode, err := r.run(ctx, h.Command, p)
-
-		// PreToolUseフックの契約は2つの終了コードだけである:
-		//   exit 0 = 許可
-		//   exit 2 = ブロック(stderrが理由)
+		// TODO(step10-2): フックを実行し、結果を判定する。
 		//
-		// それ以外(起動失敗、タイムアウトによるkill、スクリプトのバグで
-		// exit 1)はすべて「契約違反 = 検査が完了していない」を意味する。
-		// ここで素通しさせると、フックが壊れた瞬間に防御が黙って
-		// 無効化される。安全機構は「壊れたら止まる」(fail-closed)のが
-		// 正しく、「壊れたら通す」(fail-open)は最悪の設計である。
-		switch {
-		case err != nil:
-			return fmt.Errorf("PreToolUseフックを実行できなかったため、安全側に倒して中止しました: %w", err)
-		case exitCode == 0:
-			// 許可。次のフックへ。
-		case exitCode == blockExitCode:
-			// stderrの内容をエラーとして返す = LLMに理由が伝わり、
-			// LLMは別の方法を試せる。
-			return fmt.Errorf("フックがツール実行をブロックしました: %s", bytes.TrimSpace(stderr))
-		default:
-			return fmt.Errorf("PreToolUseフックが予期しない終了コード %d を返しました(契約は 0=許可 / 2=ブロック)。判定できないため安全側に倒して中止しました: %s",
-				exitCode, bytes.TrimSpace(stderr))
-		}
+		// イベント情報を payload に詰めて r.run(ctx, h.Command, p) で
+		// 実行すると、stderr・終了コード・実行エラーが返る。
+		//
+		// PreToolUseフックの契約は2つの終了コードだけである:
+		//   exit 0 = 許可(次のフックへ進む)
+		//   exit 2 = ブロック(blockExitCode。stderr が理由。
+		//            その内容をエラーに含めて返すと、LLMに理由が伝わり
+		//            LLMは別の方法を試せる)
+		//
+		// では、それ以外はどうするか。起動失敗・タイムアウトによるkill・
+		// スクリプトのバグによる exit 1 は、いずれも「契約違反 = 検査が
+		// 完了していない」を意味する。ここで素通しさせると、フックが
+		// 壊れた瞬間に防御が黙って無効化される。安全機構は「壊れたら
+		// 止まる」(fail-closed)が正しく、「壊れたら通す」(fail-open)は
+		// 最悪の設計である——という方針で判定を書くこと。
+		//
+		// エラーメッセージの組み立てに fmt を使うなら import も足すこと。
+		panic("TODO(step10-2): steps/10-streaming-hooks/hooks/hooks.go を実装してください(hints.md 参照)")
 	}
 	return nil
 }

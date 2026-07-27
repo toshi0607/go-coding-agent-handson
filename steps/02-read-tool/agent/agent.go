@@ -105,53 +105,30 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 		// tool_use を欠いた履歴に tool_result だけ足すとAPIに拒否される。
 		a.history = append(a.history, resp.ToParam())
 
-		// ループを続けるか終わるかの判定。
+		// TODO(step02-2): ここがエージェントループの心臓部である。
+		// 「ループを続けるか終えるか」を判定し、続けるならツールを
+		// 実行して結果を履歴に積む。満たすべき仕様:
 		//
-		// 素朴に書くと `if resp.StopReason != "tool_use" { return }` だが、
-		// これは罠がある。stop_reason は tool_use / end_turn の2値ではなく、
-		// max_tokens(出力上限で打ち切られた)や refusal(安全上の拒否)も
-		// あり、しかも max_tokens では tool_use ブロックが生成途中で
-		// 切れていることがある。その応答をそのまま「ターン終了」として
-		// 履歴に残すと、tool_use に対応する tool_result が永久に積まれず、
-		// 以降のリクエストがすべてAPIに拒否される——会話が死ぬ。
+		//  1. 応答に含まれる tool_use ブロックをすべて実行し
+		//     (toolUseBlocks と a.executeTool が使える)、その結果を
+		//     「1つの user メッセージ」にまとめて履歴に積み、ループを続ける。
+		//     LLMは1回の応答で複数のツールを呼ぶことがあり(並列ツール
+		//     呼び出し)、その場合も tool_result は全部まとめて
+		//     1メッセージで返すのが作法である
+		//  2. ターンの終わり(ツールを使わない応答)なら textOf(resp) を
+		//     返してループを抜ける
+		//  3. 「stop_reason == tool_use かどうか」だけで判定してはいけない。
+		//     README の「ループの終了条件」の節を読み、
+		//     - max_tokens で打ち切られた応答に tool_use が残っているケース
+		//     - stop_reason が tool_use なのに tool_use ブロックが無いケース
+		//     をどう扱うべきか考えること。検証テストはこの2つを
+		//     ピンポイントで突いてくる
 		//
-		// そのため判定は「stop_reason」ではなく「未処理のtool_useが
-		// 残っているか」を基準にし、stop_reason は続行の可否に使う。
-		toolUses := toolUseBlocks(resp)
-
-		if resp.StopReason != anthropic.StopReasonToolUse {
-			// ターンは終わり。ただし中断された応答に tool_use が
-			// 残っている場合は、打ち切りを伝える tool_result で
-			// 必ず対応を閉じてから返す(履歴の整合性を保つ)。
-			if len(toolUses) > 0 {
-				var results []anthropic.ContentBlockParamUnion
-				for _, block := range toolUses {
-					results = append(results, anthropic.NewToolResultBlock(block.ID,
-						fmt.Sprintf("応答が %s で中断されたため、このツールは実行されませんでした", resp.StopReason), true))
-				}
-				a.history = append(a.history, anthropic.NewUserMessage(results...))
-			}
-			if resp.StopReason == anthropic.StopReasonMaxTokens {
-				fmt.Fprintln(a.out, "(出力が長すぎて途中で打ち切られました)")
-			}
-			return textOf(resp), nil
-		}
-
-		// stop_reason が tool_use なのに tool_use ブロックが無い、という
-		// 矛盾した応答もありうる。空の user メッセージを送るとAPIエラーに
-		// なるので、ここで打ち切る。
-		if len(toolUses) == 0 {
-			return textOf(resp), nil
-		}
-
-		// ツールを実行し、結果を1つのuserメッセージにまとめて返す。
-		// LLMは1回の応答で複数のツールを呼ぶことがあり(並列ツール呼び出し)、
-		// その場合もtool_resultは全部まとめて1メッセージで返すのが作法。
-		var results []anthropic.ContentBlockParamUnion
-		for _, block := range toolUses {
-			results = append(results, a.executeTool(ctx, block))
-		}
-		a.history = append(a.history, anthropic.NewUserMessage(results...))
+		// 使える道具: toolUseBlocks(resp) / a.executeTool(ctx, block) /
+		// anthropic.NewUserMessage(results...) /
+		// anthropic.NewToolResultBlock(id, テキスト, isError) /
+		// resp.StopReason(anthropic.StopReasonToolUse など)
+		panic("TODO(step02-2): steps/02-read-tool/agent/agent.go のループを完成させてください(hints.md 参照)")
 	}
 
 	msg := fmt.Sprintf("(%d回の往復上限に達したため打ち切りました)", a.maxIterations)
