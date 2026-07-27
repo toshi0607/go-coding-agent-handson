@@ -19,6 +19,8 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+
+	"github.com/toshi0607/go-coding-agent-handson/final/tools"
 )
 
 // CommandsDir はカスタムコマンドの置き場所(作業ディレクトリ基準)。
@@ -42,12 +44,24 @@ type Result struct {
 
 // Registry はコマンドの解決と実行を担う。
 type Registry struct {
-	dir string
+	// ws はコマンドファイルのパス解決に使う。
+	//
+	// カスタムコマンドは「リポジトリに置かれたファイルを読んで、その中身を
+	// ユーザー入力としてLLMに送る」機能である。つまりファイルの中身は
+	// そのままAPIリクエストに載って外に出る。コマンド名を検証しても、
+	// コマンドファイル自身がシンボリックリンクなら
+	//
+	//	.agent/commands/leak.md -> ~/.ssh/id_rsa
+	//
+	// のように作業ディレクトリの外を読める。名前の検証(isValidName)は
+	// 「パスを組み立てる前」の防御で、「組み立てたパスが実際にどこを指すか」は
+	// 別の防御(Workspace)が要る、ということである。
+	ws *tools.Workspace
 }
 
-// New は workDir を基準にカスタムコマンドを探す Registry を作る。
-func New(workDir string) *Registry {
-	return &Registry{dir: filepath.Join(workDir, CommandsDir)}
+// New はカスタムコマンドを作業ディレクトリ内から探す Registry を作る。
+func New(ws *tools.Workspace) *Registry {
+	return &Registry{ws: ws}
 }
 
 // IsCommand は入力がスラッシュコマンドかどうかを判定する。
@@ -112,7 +126,12 @@ func (r *Registry) Execute(line string) Result {
 	}
 
 	// 組み込みになければカスタムコマンドを探す。
-	content, err := os.ReadFile(filepath.Join(r.dir, name+".md"))
+	// パスは必ず Workspace 経由で解決する(上の ws のコメントを参照)。
+	path, err := r.ws.Resolve(filepath.Join(CommandsDir, name+".md"))
+	if err != nil {
+		return Result{Output: fmt.Sprintf("コマンド /%s は読み込めません: %v", name, err)}
+	}
+	content, err := os.ReadFile(path)
 	if err != nil {
 		return Result{Output: fmt.Sprintf("コマンド /%s は存在しません。/help で一覧を確認できます。", name)}
 	}
@@ -139,7 +158,13 @@ func (r *Registry) helpText() string {
 
 // customCommandNames は .agent/commands/*.md のコマンド名一覧を返す。
 func (r *Registry) customCommandNames() []string {
-	entries, err := os.ReadDir(r.dir)
+	// 一覧を作るだけでも Workspace を通す。commands ディレクトリ自体が
+	// 外を指すリンクなら、そこにあるファイル名を見せる必要はない。
+	dir, err := r.ws.Resolve(CommandsDir)
+	if err != nil {
+		return nil
+	}
+	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return nil
 	}
