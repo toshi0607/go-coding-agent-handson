@@ -1,7 +1,25 @@
-# make check で全体の健全性を確認する(APIキー不要)
+# 使い方(いずれもAPIキー不要):
+#
+#   make check           リポジトリ全体の健全性確認(build + vet + test)
+#   make check STEP=01   steps/01-*/ の検証テストを実行(rustlings方式)
+#
+# STEP指定時は該当stepだけを build / vet した上で、環境変数
+# AGENT_STEP_CHECK を立てて検証テストを走らせる。steps/ のテストは
+# このゲートが立っているときだけ実行される(穴あきのstepが
+# リポジトリ全体の go test ./... を失敗させないため)。
 .PHONY: check build vet test
 
-check: build vet test
+STEPDIR = $(wildcard steps/$(STEP)-*)
+
+check:
+ifdef STEP
+	@test -n "$(STEPDIR)" || { echo "steps/$(STEP)-* が見つかりません(例: make check STEP=01)"; exit 1; }
+	go build ./$(STEPDIR)/...
+	go vet ./$(STEPDIR)/...
+	AGENT_STEP_CHECK=1 go test ./$(STEPDIR)/...
+else
+	$(MAKE) build vet test
+endif
 
 build:
 	go build ./...
@@ -11,5 +29,3 @@ vet:
 
 test:
 	go test ./...
-
-# steps/ 追加後は `make check STEP=01` で該当stepの検証テストを実行できるようにする予定
