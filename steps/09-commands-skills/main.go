@@ -198,7 +198,9 @@ func run(oneShot string) error {
 		_, err := mainAgent.Run(ctx, oneShot)
 		return err
 	}
-	return repl(ctx, mainAgent, command.New(workDir), stdin)
+	// カスタムコマンドもリポジトリのファイルを読む機能なので、
+	// 封じ込め(ws)を通す。
+	return repl(ctx, mainAgent, command.New(ws), stdin)
 }
 
 // repl は対話ループ。入力を読み、スラッシュコマンドならここで処理し、

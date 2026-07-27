@@ -34,6 +34,8 @@ return true
 
 `/` や `.` を許さないので、`../` を含む名前も絶対パスもこの1つの検証で弾けます。「危険な形を列挙する」のではなく「安全な形を定義する」——同じ原則が3度目の登場です(workspace、isSimpleCommand、そしてここ)。
 
+なお `TestExecuteRejectsSymlinkEscape` もこの課題を埋めると通ります。シンボリックリンク対策そのものは `Execute` で実装済み(`ws.Resolve`)ですが、`Execute` は先に `isValidName` を通るため、穴が空いたままだとこのテストも失敗するからです。
+
 ## 答え合わせ
 
 解答は次のstepの同じファイル([../10-streaming-hooks/prompt/prompt.go](../10-streaming-hooks/prompt/prompt.go)、[../10-streaming-hooks/command/command.go](../10-streaming-hooks/command/command.go))に埋まっています。
