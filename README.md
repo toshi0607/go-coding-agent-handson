@@ -154,6 +154,14 @@ LLM呼び出しはインターフェース化されており、テストは録�
 make check   # go build + go vet + go test
 ```
 
+`steps/` のテストは `make check STEP=NN` でのみ走るため、穴あきのstepがあっても上のコマンドは通ります。教材そのものが壊れていないか(各stepが穴あき状態で「ビルドは通るがテストは落ちる」こと、step 10 の中身が `final/` と一致していること)は別のコマンドで検査します。
+
+```bash
+make check-steps   # 全stepを検査するため1分ほどかかります
+```
+
+GitHub Actions では push / pull request のたびに、gofmt・`go mod tidy -diff`・build・vet・`go test -race`・`make check-steps` を実行しています(定義は [.github/workflows/ci.yml](.github/workflows/ci.yml))。CIにAPIキーは置いていないので、「APIキーなしで通る」ことがCIそのもので保証されます。
+
 ## ライセンス
 
 MIT

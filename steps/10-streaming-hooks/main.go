@@ -8,7 +8,7 @@
 // 使い方:
 //
 //	export ANTHROPIC_API_KEY=...
-//	go run ./steps/10-streaming-hooks   # 対話モード(REPL)
+//	go run ./steps/10-streaming-hooks            # 対話モード(REPL)
 //	go run ./steps/10-streaming-hooks -p "質問"   # ワンショットモード
 package main
 
