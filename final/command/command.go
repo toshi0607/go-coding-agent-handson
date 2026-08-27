@@ -17,7 +17,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/toshi0607/go-coding-agent-handson/final/tools"
@@ -174,6 +174,6 @@ func (r *Registry) customCommandNames() []string {
 			names = append(names, strings.TrimSuffix(e.Name(), ".md"))
 		}
 	}
-	sort.Strings(names)
+	slices.Sort(names)
 	return names
 }

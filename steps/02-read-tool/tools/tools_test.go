@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -10,7 +9,7 @@ import (
 
 func run(t *testing.T, tool Tool, input string) (string, error) {
 	t.Helper()
-	return tool.Run(context.Background(), json.RawMessage(input))
+	return tool.Run(t.Context(), json.RawMessage(input))
 }
 
 func TestReadFile(t *testing.T) {

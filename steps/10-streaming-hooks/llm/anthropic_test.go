@@ -1,7 +1,6 @@
 package llm
 
 import (
-	"context"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -66,7 +65,7 @@ func TestStreamAccumulatesTextAndToolUse(t *testing.T) {
 	})
 
 	var streamed strings.Builder
-	resp, err := client.Stream(context.Background(), anthropic.MessageNewParams{
+	resp, err := client.Stream(t.Context(), anthropic.MessageNewParams{
 		Model:     "claude-opus-5",
 		MaxTokens: 100,
 		Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock("main.goを読んで"))},
@@ -127,7 +126,7 @@ func TestStreamWithoutCallback(t *testing.T) {
 		sse("message_stop", `{"type":"message_stop"}`),
 	})
 
-	resp, err := client.Stream(context.Background(), anthropic.MessageNewParams{
+	resp, err := client.Stream(t.Context(), anthropic.MessageNewParams{
 		Model: "claude-opus-5", MaxTokens: 100,
 	}, nil)
 	if err != nil {
@@ -147,7 +146,7 @@ func TestStreamReportsServerError(t *testing.T) {
 		sse("error", `{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}`),
 	})
 
-	if _, err := client.Stream(context.Background(), anthropic.MessageNewParams{
+	if _, err := client.Stream(t.Context(), anthropic.MessageNewParams{
 		Model: "claude-opus-5", MaxTokens: 100,
 	}, nil); err == nil {
 		t.Fatal("ストリーム中のエラーが握りつぶされている")

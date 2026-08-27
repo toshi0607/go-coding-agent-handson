@@ -157,7 +157,7 @@ func TestResolveRejectsDanglingSymlinkEscape(t *testing.T) {
 
 			// ツール経由でも実際に外部へ書き込めないこと。
 			input, _ := jsonObject("path", tc.probe, "old_str", "", "new_str", "PWNED")
-			if _, err := NewEditFile(ws).Run(testCtx(), input); err == nil {
+			if _, err := NewEditFile(ws).Run(t.Context(), input); err == nil {
 				t.Error("edit_file が壊れたリンク経由で書き込めた")
 			}
 			if _, err := os.Stat(victim); err == nil {
@@ -225,14 +225,14 @@ func TestToolsAreContained(t *testing.T) {
 
 	t.Run("read_file", func(t *testing.T) {
 		input, _ := jsonObject("path", secret)
-		if _, err := NewReadFile(ws).Run(testCtx(), input); err == nil {
+		if _, err := NewReadFile(ws).Run(t.Context(), input); err == nil {
 			t.Error("外部ファイルを読めてしまった")
 		}
 	})
 
 	t.Run("list_files", func(t *testing.T) {
 		input, _ := jsonObject("path", outsideDir)
-		if _, err := NewListFiles(ws).Run(testCtx(), input); err == nil {
+		if _, err := NewListFiles(ws).Run(t.Context(), input); err == nil {
 			t.Error("外部ディレクトリを一覧できてしまった")
 		}
 	})
@@ -240,7 +240,7 @@ func TestToolsAreContained(t *testing.T) {
 	t.Run("edit_file", func(t *testing.T) {
 		target := filepath.Join(outsideDir, "written.txt")
 		input, _ := jsonObject("path", target, "old_str", "", "new_str", "書き込み")
-		if _, err := NewEditFile(ws).Run(testCtx(), input); err == nil {
+		if _, err := NewEditFile(ws).Run(t.Context(), input); err == nil {
 			t.Error("外部ファイルに書き込めてしまった")
 		}
 		if _, err := os.Stat(target); err == nil {
@@ -252,7 +252,7 @@ func TestToolsAreContained(t *testing.T) {
 	t.Run("内側は許可", func(t *testing.T) {
 		must(t, os.WriteFile(filepath.Join(dir, "ok.txt"), []byte("中身"), 0o644))
 		input, _ := jsonObject("path", "ok.txt")
-		got, err := NewReadFile(ws).Run(testCtx(), input)
+		got, err := NewReadFile(ws).Run(t.Context(), input)
 		if err != nil {
 			t.Fatalf("内側のファイルが読めない: %v", err)
 		}
@@ -270,7 +270,7 @@ func TestBashRunsInWorkspace(t *testing.T) {
 	must(t, os.WriteFile(filepath.Join(dir, "marker.txt"), nil, 0o644))
 
 	input, _ := jsonObject("command", "ls")
-	got, err := NewBash(ws).Run(testCtx(), input)
+	got, err := NewBash(ws).Run(t.Context(), input)
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

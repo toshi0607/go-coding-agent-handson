@@ -47,7 +47,7 @@ func startFakeServer(t *testing.T, handle serverFunc) *Client {
 
 	c := newClient("weather", clientWriter, clientReader)
 	t.Cleanup(func() { _ = c.Close() })
-	if err := c.initialize(context.Background()); err != nil {
+	if err := c.initialize(t.Context()); err != nil {
 		t.Fatalf("initialize: %v", err)
 	}
 	return c
@@ -98,7 +98,7 @@ func weatherServer(t *testing.T, req rawRequest, w io.Writer) {
 
 func TestListAndCallTools(t *testing.T) {
 	c := startFakeServer(t, weatherServer)
-	ctx := context.Background()
+	ctx := t.Context()
 
 	toolList, err := c.Tools(ctx)
 	if err != nil {
@@ -149,7 +149,7 @@ func TestCallSkipsNotifications(t *testing.T) {
 		})
 	})
 
-	infos, err := c.ListTools(context.Background())
+	infos, err := c.ListTools(t.Context())
 	if err != nil {
 		t.Fatalf("ListTools: %v", err)
 	}
@@ -172,12 +172,12 @@ func TestCallReturnsRPCError(t *testing.T) {
 		_, _ = w.Write(append(resp, '\n'))
 	})
 
-	_, err := c.ListTools(context.Background())
+	_, err := c.ListTools(t.Context())
 	if err == nil {
 		t.Fatal("エラー応答がエラーとして返っていない")
 	}
-	var rpcErr *rpcError
-	if !errors.As(err, &rpcErr) {
+	rpcErr, ok := errors.AsType[*rpcError](err)
+	if !ok {
 		t.Fatalf("rpcErrorとして返るべき: %T %v", err, err)
 	}
 	if rpcErr.Code != -32601 || !strings.Contains(rpcErr.Error(), "Method not found") {
@@ -199,7 +199,7 @@ func TestCallToolIsError(t *testing.T) {
 		})
 	})
 
-	_, err := c.CallTool(context.Background(), "get_weather", json.RawMessage(`{"city":"???"}`))
+	_, err := c.CallTool(t.Context(), "get_weather", json.RawMessage(`{"city":"???"}`))
 	if err == nil {
 		t.Fatal("isError の結果がエラーとして返っていない")
 	}
@@ -219,7 +219,7 @@ func TestCallTimesOutOnSilentServer(t *testing.T) {
 	}
 	c := startFakeServer(t, silent)
 
-	ctx, cancel := context.WithTimeout(context.Background(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
 	defer cancel()
 
 	done := make(chan error, 1)
@@ -261,7 +261,7 @@ func TestLateResponseDoesNotDesyncNextCall(t *testing.T) {
 		}
 	})
 
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Millisecond)
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Millisecond)
 	defer cancel()
 	if _, err := c.ListTools(ctx); err == nil {
 		t.Fatal("1回目はタイムアウトするはず")
@@ -269,7 +269,7 @@ func TestLateResponseDoesNotDesyncNextCall(t *testing.T) {
 
 	// 遅れた応答が届くのを待ってから次のリクエストを出す。
 	time.Sleep(200 * time.Millisecond)
-	got, err := c.CallTool(context.Background(), "get_weather", json.RawMessage(`{}`))
+	got, err := c.CallTool(t.Context(), "get_weather", json.RawMessage(`{}`))
 	if err != nil {
 		t.Fatalf("2回目が失敗した: %v", err)
 	}
@@ -302,10 +302,10 @@ func TestCallFailsWhenServerExits(t *testing.T) {
 	t.Cleanup(func() { _ = clientWriter.Close() })
 
 	c := newClient("dead", clientWriter, clientReader)
-	if err := c.initialize(context.Background()); err != nil {
+	if err := c.initialize(t.Context()); err != nil {
 		t.Fatalf("initialize: %v", err)
 	}
-	if _, err := c.ListTools(context.Background()); err == nil {
+	if _, err := c.ListTools(t.Context()); err == nil {
 		t.Fatal("接続断がエラーになっていない")
 	} else if !strings.Contains(err.Error(), "接続が切れました") {
 		t.Errorf("接続断と分かるメッセージでない: %v", err)
@@ -326,7 +326,7 @@ func script(after string) []string {
 // 行儀のよいサーバー(stdinが閉じたら終了する)を正しく待って閉じること。
 func TestCloseWaitsForServerExit(t *testing.T) {
 	var stderr bytes.Buffer
-	c, err := Connect(context.Background(), Server{
+	c, err := Connect(t.Context(), Server{
 		Name: "polite",
 		// 標準エラーに1行出してから、stdinのEOFを待って終了する。
 		Command: "sh",
@@ -359,7 +359,7 @@ func TestCloseWaitsForServerExit(t *testing.T) {
 // stdinを閉じても終了しないサーバーを、待ち続けずに強制終了すること。
 // この経路がないと、行儀の悪いサーバー1つでエージェントが終了できなくなる。
 func TestCloseKillsUnresponsiveServer(t *testing.T) {
-	c, err := Connect(context.Background(), Server{
+	c, err := Connect(t.Context(), Server{
 		Name:    "stubborn",
 		Command: "sh",
 		// exec で置き換えるのは、シェルを kill しても子の sleep が

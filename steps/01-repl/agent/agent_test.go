@@ -1,7 +1,6 @@
 package agent
 
 import (
-	"context"
 	"encoding/json"
 	"strings"
 	"testing"
@@ -13,7 +12,7 @@ func TestTextOnlyTurn(t *testing.T) {
 	client := llm.NewReplayClient(llm.TextResponse("こんにちは!"))
 	a := New(Config{Client: client, Model: "claude-opus-5"})
 
-	got, err := a.Run(context.Background(), "やあ")
+	got, err := a.Run(t.Context(), "やあ")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -39,10 +38,10 @@ func TestHistoryCarriesAcrossTurns(t *testing.T) {
 	)
 	a := New(Config{Client: client, Model: "claude-opus-5"})
 
-	if _, err := a.Run(context.Background(), "私はGopherです"); err != nil {
+	if _, err := a.Run(t.Context(), "私はGopherです"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.Run(context.Background(), "私の名前を覚えていますか?"); err != nil {
+	if _, err := a.Run(t.Context(), "私の名前を覚えていますか?"); err != nil {
 		t.Fatal(err)
 	}
 

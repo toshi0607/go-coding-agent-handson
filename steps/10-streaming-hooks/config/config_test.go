@@ -70,17 +70,17 @@ func TestExecutables(t *testing.T) {
 		t.Fatalf("実行されるものが漏れている: %+v", list)
 	}
 
-	joined := ""
+	var joined strings.Builder
 	for _, e := range list {
-		joined += e.Source + " / " + e.Command + "\n"
+		joined.WriteString(e.Source + " / " + e.Command + "\n")
 	}
 	for _, want := range []string{
 		"guard.sh", "log.sh",
 		"weather-server --port 8080", // 引数まで見せないと判断できない
 		"ls, go",                     // allowlist も「承認を省く」という判断
 	} {
-		if !strings.Contains(joined, want) {
-			t.Errorf("一覧に %q がない:\n%s", want, joined)
+		if !strings.Contains(joined.String(), want) {
+			t.Errorf("一覧に %q がない:\n%s", want, joined.String())
 		}
 	}
 

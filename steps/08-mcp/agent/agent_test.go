@@ -43,7 +43,7 @@ func TestTextOnlyTurn(t *testing.T) {
 	client := llm.NewReplayClient(llm.TextResponse("こんにちは!"))
 	a := New(Config{Client: client, Model: "claude-opus-5"})
 
-	got, err := a.Run(context.Background(), "やあ")
+	got, err := a.Run(t.Context(), "やあ")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -68,7 +68,7 @@ func TestToolLoop(t *testing.T) {
 		Permission: allowAll("get_time"),
 	})
 
-	got, err := a.Run(context.Background(), "いま何時?")
+	got, err := a.Run(t.Context(), "いま何時?")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -108,7 +108,7 @@ func TestDeniedToolReturnsErrorResult(t *testing.T) {
 		Permission: permission.New(permission.Config{}),
 	})
 
-	got, err := a.Run(context.Background(), "a.goを編集して")
+	got, err := a.Run(t.Context(), "a.goを編集して")
 	if err != nil {
 		t.Fatalf("拒否はターンを止めない(LLMに返して継続する)はず: %v", err)
 	}
@@ -132,7 +132,7 @@ func TestUnknownToolReturnsError(t *testing.T) {
 	)
 	a := New(Config{Client: client, Model: "claude-opus-5"})
 
-	if _, err := a.Run(context.Background(), "何かして"); err != nil {
+	if _, err := a.Run(t.Context(), "何かして"); err != nil {
 		t.Fatalf("未知ツールもエラー結果として返して継続するはず: %v", err)
 	}
 	second, _ := json.Marshal(client.Requests()[1].Messages)
@@ -156,7 +156,7 @@ func TestMaxIterationsStopsRunawayLoop(t *testing.T) {
 		MaxIterations: 2,
 	})
 
-	got, err := a.Run(context.Background(), "無限に働いて")
+	got, err := a.Run(t.Context(), "無限に働いて")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -180,7 +180,7 @@ func TestInterruptedToolUseIsClosedOut(t *testing.T) {
 	client := llm.NewReplayClient(interrupted, llm.TextResponse("2ターン目の応答"))
 	a := New(Config{Client: client, Model: "claude-opus-5", Permission: allowAll()})
 
-	if _, err := a.Run(context.Background(), "a.goを直して"); err != nil {
+	if _, err := a.Run(t.Context(), "a.goを直して"); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
@@ -196,7 +196,7 @@ func TestInterruptedToolUseIsClosedOut(t *testing.T) {
 	}
 
 	// 次のターンも正常に続けられる。
-	if _, err := a.Run(context.Background(), "続けて"); err != nil {
+	if _, err := a.Run(t.Context(), "続けて"); err != nil {
 		t.Fatalf("次のターンが失敗した: %v", err)
 	}
 }
@@ -210,7 +210,7 @@ func TestToolUseStopReasonWithoutToolBlocks(t *testing.T) {
 	client := llm.NewReplayClient(inconsistent)
 	a := New(Config{Client: client, Model: "claude-opus-5"})
 
-	got, err := a.Run(context.Background(), "何かして")
+	got, err := a.Run(t.Context(), "何かして")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -243,7 +243,7 @@ func TestTaskToolRunsSubAgent(t *testing.T) {
 		Permission: allowAll("task"),
 	})
 
-	got, err := parent.Run(context.Background(), "認証処理どこ?")
+	got, err := parent.Run(t.Context(), "認証処理どこ?")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -285,7 +285,7 @@ func TestCompactionHappensOnlyAtTurnBoundary(t *testing.T) {
 		ContextManager: &contextmgr.Manager{CompactThreshold: 1, MaxToolResultChars: 1000},
 	})
 
-	if _, err := a.Run(context.Background(), "やって"); err != nil {
+	if _, err := a.Run(t.Context(), "やって"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -302,7 +302,7 @@ func TestCompactionHappensOnlyAtTurnBoundary(t *testing.T) {
 	}
 
 	// ターンが終われば圧縮は走る(閾値を超えているので)。
-	if _, err := a.Run(context.Background(), "続けて"); err != nil {
+	if _, err := a.Run(t.Context(), "続けて"); err != nil {
 		t.Fatal(err)
 	}
 	if n := len(client.Requests()); n != 4 {
@@ -362,11 +362,11 @@ func TestAutoCompaction(t *testing.T) {
 		},
 	})
 
-	if _, err := a.Run(context.Background(), "1回目"); err != nil {
+	if _, err := a.Run(t.Context(), "1回目"); err != nil {
 		t.Fatal(err)
 	}
 	// 2ターン目の開始時に自動compactionが走る。
-	if _, err := a.Run(context.Background(), "2回目"); err != nil {
+	if _, err := a.Run(t.Context(), "2回目"); err != nil {
 		t.Fatal(err)
 	}
 

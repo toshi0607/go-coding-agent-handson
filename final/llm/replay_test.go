@@ -1,7 +1,6 @@
 package llm
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -11,7 +10,7 @@ import (
 func TestReplayTextResponse(t *testing.T) {
 	c := NewReplayClient(TextResponse("こんにちは"))
 
-	resp, err := c.Complete(context.Background(), anthropic.MessageNewParams{})
+	resp, err := c.Complete(t.Context(), anthropic.MessageNewParams{})
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
@@ -26,7 +25,7 @@ func TestReplayTextResponse(t *testing.T) {
 func TestReplayToolUseResponse(t *testing.T) {
 	c := NewReplayClient(ToolUseResponse("toolu_1", "read_file", `{"path":"main.go"}`))
 
-	resp, err := c.Complete(context.Background(), anthropic.MessageNewParams{})
+	resp, err := c.Complete(t.Context(), anthropic.MessageNewParams{})
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
@@ -55,7 +54,7 @@ func TestReplayToolUseResponse(t *testing.T) {
 // 「ワイヤーフォーマットからUnmarshalする」実装方針の正しさの証明になる。
 func TestReplayMessageRoundTrip(t *testing.T) {
 	c := NewReplayClient(TextResponse("応答テキスト"))
-	resp, err := c.Complete(context.Background(), anthropic.MessageNewParams{})
+	resp, err := c.Complete(t.Context(), anthropic.MessageNewParams{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,7 +72,7 @@ func TestReplayMessageRoundTrip(t *testing.T) {
 func TestReplayStreamCallsOnText(t *testing.T) {
 	c := NewReplayClient(TextResponse("ストリーム"))
 	var streamed strings.Builder
-	resp, err := c.Stream(context.Background(), anthropic.MessageNewParams{}, func(s string) {
+	resp, err := c.Stream(t.Context(), anthropic.MessageNewParams{}, func(s string) {
 		streamed.WriteString(s)
 	})
 	if err != nil {
@@ -89,10 +88,10 @@ func TestReplayStreamCallsOnText(t *testing.T) {
 
 func TestReplayExhausted(t *testing.T) {
 	c := NewReplayClient(TextResponse("1つだけ"))
-	if _, err := c.Complete(context.Background(), anthropic.MessageNewParams{}); err != nil {
+	if _, err := c.Complete(t.Context(), anthropic.MessageNewParams{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Complete(context.Background(), anthropic.MessageNewParams{}); err == nil {
+	if _, err := c.Complete(t.Context(), anthropic.MessageNewParams{}); err == nil {
 		t.Fatal("レスポンスを使い切ったらエラーになるべき")
 	}
 }

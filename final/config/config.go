@@ -8,12 +8,13 @@
 package config
 
 import (
+	"cmp"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/toshi0607/go-coding-agent-handson/final/hooks"
@@ -109,11 +110,11 @@ func Executables(s Settings, m MCPConfig) []Executable {
 		})
 	}
 	// map の反復順は不定なので、表示が毎回変わらないよう並べ替える。
-	sort.Slice(list, func(i, j int) bool {
-		if list[i].Source != list[j].Source {
-			return list[i].Source < list[j].Source
-		}
-		return list[i].Command < list[j].Command
+	slices.SortFunc(list, func(a, b Executable) int {
+		return cmp.Or(
+			strings.Compare(a.Source, b.Source),
+			strings.Compare(a.Command, b.Command),
+		)
 	})
 	return list
 }

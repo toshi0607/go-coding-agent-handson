@@ -1,7 +1,6 @@
 package skill
 
 import (
-	"context"
 	"encoding/json"
 	"io"
 	"os"
@@ -368,7 +367,7 @@ func TestToolReturnsBodyOnDemand(t *testing.T) {
 	}
 	tool := NewTool(skills)
 
-	got, err := tool.Run(context.Background(), json.RawMessage(`{"name":"commit"}`))
+	got, err := tool.Run(t.Context(), json.RawMessage(`{"name":"commit"}`))
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -391,7 +390,7 @@ func TestToolReturnsBodyOnDemand(t *testing.T) {
 
 func TestToolUnknownSkill(t *testing.T) {
 	tool := NewTool([]Skill{{Name: "commit", Body: "x"}})
-	_, err := tool.Run(context.Background(), json.RawMessage(`{"name":"nosuch"}`))
+	_, err := tool.Run(t.Context(), json.RawMessage(`{"name":"nosuch"}`))
 	if err == nil {
 		t.Fatal("存在しないスキルはエラーになるべき")
 	}

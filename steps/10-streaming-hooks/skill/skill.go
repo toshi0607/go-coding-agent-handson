@@ -29,7 +29,7 @@ import (
 	"io/fs"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/toshi0607/go-coding-agent-handson/steps/10-streaming-hooks/tools"
@@ -123,7 +123,7 @@ func Load(ws *tools.Workspace, warn io.Writer) ([]Skill, error) {
 		seen[s.Name] = e.Name()
 		skills = append(skills, s)
 	}
-	sort.Slice(skills, func(i, j int) bool { return skills[i].Name < skills[j].Name })
+	slices.SortFunc(skills, func(a, b Skill) int { return strings.Compare(a.Name, b.Name) })
 	return skills, nil
 }
 

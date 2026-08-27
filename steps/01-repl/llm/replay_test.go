@@ -1,7 +1,6 @@
 package llm
 
 import (
-	"context"
 	"strings"
 	"testing"
 
@@ -11,7 +10,7 @@ import (
 func TestReplayTextResponse(t *testing.T) {
 	c := NewReplayClient(TextResponse("こんにちは"))
 
-	resp, err := c.Complete(context.Background(), anthropic.MessageNewParams{})
+	resp, err := c.Complete(t.Context(), anthropic.MessageNewParams{})
 	if err != nil {
 		t.Fatalf("Complete: %v", err)
 	}
@@ -28,7 +27,7 @@ func TestReplayTextResponse(t *testing.T) {
 // 「ワイヤーフォーマットからUnmarshalする」実装方針の正しさの証明になる。
 func TestReplayMessageRoundTrip(t *testing.T) {
 	c := NewReplayClient(TextResponse("応答テキスト"))
-	resp, err := c.Complete(context.Background(), anthropic.MessageNewParams{})
+	resp, err := c.Complete(t.Context(), anthropic.MessageNewParams{})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -45,10 +44,10 @@ func TestReplayMessageRoundTrip(t *testing.T) {
 
 func TestReplayExhausted(t *testing.T) {
 	c := NewReplayClient(TextResponse("1つだけ"))
-	if _, err := c.Complete(context.Background(), anthropic.MessageNewParams{}); err != nil {
+	if _, err := c.Complete(t.Context(), anthropic.MessageNewParams{}); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := c.Complete(context.Background(), anthropic.MessageNewParams{}); err == nil {
+	if _, err := c.Complete(t.Context(), anthropic.MessageNewParams{}); err == nil {
 		t.Fatal("レスポンスを使い切ったらエラーになるべき")
 	}
 }

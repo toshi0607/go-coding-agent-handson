@@ -1,7 +1,6 @@
 package hooks
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -14,7 +13,7 @@ func TestPreToolUseBlocks(t *testing.T) {
 	r := NewRunner(Config{
 		"PreToolUse": {{Matcher: "bash", Command: `echo "rmは禁止です" >&2; exit 2`}},
 	})
-	err := r.RunPre(context.Background(), "bash", json.RawMessage(`{"command":"rm -rf /"}`))
+	err := r.RunPre(t.Context(), "bash", json.RawMessage(`{"command":"rm -rf /"}`))
 	if err == nil {
 		t.Fatal("exit 2 のフックはツール実行をブロックすべき")
 	}
@@ -27,7 +26,7 @@ func TestPreToolUseAllows(t *testing.T) {
 	r := NewRunner(Config{
 		"PreToolUse": {{Matcher: "bash", Command: "exit 0"}},
 	})
-	if err := r.RunPre(context.Background(), "bash", json.RawMessage(`{}`)); err != nil {
+	if err := r.RunPre(t.Context(), "bash", json.RawMessage(`{}`)); err != nil {
 		t.Fatalf("exit 0 のフックはブロックしないはず: %v", err)
 	}
 }
@@ -44,7 +43,7 @@ func TestPreToolUseFailsClosed(t *testing.T) {
 	for name, command := range cases {
 		t.Run(name, func(t *testing.T) {
 			r := NewRunner(Config{"PreToolUse": {{Matcher: "*", Command: command}}})
-			if err := r.RunPre(context.Background(), "bash", json.RawMessage(`{}`)); err == nil {
+			if err := r.RunPre(t.Context(), "bash", json.RawMessage(`{}`)); err == nil {
 				t.Error("フックが正常に判定できなかった場合はブロックすべき")
 			}
 		})
@@ -56,7 +55,7 @@ func TestMatcherFiltersByToolName(t *testing.T) {
 	r := NewRunner(Config{
 		"PreToolUse": {{Matcher: "bash", Command: "exit 2"}},
 	})
-	if err := r.RunPre(context.Background(), "read_file", json.RawMessage(`{}`)); err != nil {
+	if err := r.RunPre(t.Context(), "read_file", json.RawMessage(`{}`)); err != nil {
 		t.Fatalf("matcher対象外のツールでフックが発火した: %v", err)
 	}
 }
@@ -68,7 +67,7 @@ func TestHookReceivesPayloadOnStdin(t *testing.T) {
 	r := NewRunner(Config{
 		"PostToolUse": {{Matcher: "*", Command: "cat > " + outFile}},
 	})
-	r.RunPost(context.Background(), "bash", json.RawMessage(`{"command":"ls"}`), "file1\nfile2")
+	r.RunPost(t.Context(), "bash", json.RawMessage(`{"command":"ls"}`), "file1\nfile2")
 
 	data, err := os.ReadFile(outFile)
 	if err != nil {

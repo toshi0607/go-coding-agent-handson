@@ -1,7 +1,6 @@
 package contextmgr
 
 import (
-	"context"
 	"strings"
 	"testing"
 	"unicode/utf8"
@@ -82,7 +81,7 @@ func TestCompact(t *testing.T) {
 		System:   []anthropic.TextBlockParam{{Text: "あなたはエージェントです"}},
 		Messages: history,
 	}
-	compacted, err := m.Compact(context.Background(), client, base)
+	compacted, err := m.Compact(t.Context(), client, base)
 	if err != nil {
 		t.Fatalf("Compact: %v", err)
 	}
@@ -128,7 +127,7 @@ func TestCompactKeepsToolsAndSystem(t *testing.T) {
 			anthropic.NewUserMessage(anthropic.NewTextBlock("a.goを読んで")),
 		},
 	}
-	if _, err := m.Compact(context.Background(), client, base); err != nil {
+	if _, err := m.Compact(t.Context(), client, base); err != nil {
 		t.Fatalf("Compact: %v", err)
 	}
 
