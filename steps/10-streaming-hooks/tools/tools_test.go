@@ -1,7 +1,6 @@
 package tools
 
 import (
-	"context"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -11,10 +10,8 @@ import (
 
 func run(t *testing.T, tool Tool, input string) (string, error) {
 	t.Helper()
-	return tool.Run(context.Background(), json.RawMessage(input))
+	return tool.Run(t.Context(), json.RawMessage(input))
 }
-
-func testCtx() context.Context { return context.Background() }
 
 // jsonObject はキーと値の並びからJSONオブジェクトを作るテストヘルパー。
 func jsonObject(kv ...string) (json.RawMessage, error) {
@@ -83,7 +80,7 @@ func TestEditFileReplace(t *testing.T) {
 	must(t, os.WriteFile(path, []byte("func old() {}\n"), 0o644))
 
 	input, _ := jsonObject("path", "main.go", "old_str", "func old()", "new_str", "func new()")
-	if _, err := NewEditFile(workspaceFor(t, dir)).Run(testCtx(), input); err != nil {
+	if _, err := NewEditFile(workspaceFor(t, dir)).Run(t.Context(), input); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
@@ -97,7 +94,7 @@ func TestEditFileCreate(t *testing.T) {
 	dir := t.TempDir()
 
 	input, _ := jsonObject("path", "nested/new.txt", "old_str", "", "new_str", "created")
-	if _, err := NewEditFile(workspaceFor(t, dir)).Run(testCtx(), input); err != nil {
+	if _, err := NewEditFile(workspaceFor(t, dir)).Run(t.Context(), input); err != nil {
 		t.Fatalf("Run: %v", err)
 	}
 
@@ -113,7 +110,7 @@ func TestEditFileRejectsAmbiguousMatch(t *testing.T) {
 	must(t, os.WriteFile(path, []byte("x\nx\n"), 0o644))
 
 	input, _ := jsonObject("path", "f.txt", "old_str", "x", "new_str", "y")
-	if _, err := NewEditFile(workspaceFor(t, dir)).Run(testCtx(), input); err == nil {
+	if _, err := NewEditFile(workspaceFor(t, dir)).Run(t.Context(), input); err == nil {
 		t.Fatal("old_str が複数マッチする編集はエラーになるべき")
 	}
 	// 失敗した編集はファイルを変更しない。
@@ -128,7 +125,7 @@ func TestEditFileRejectsNoMatch(t *testing.T) {
 	must(t, os.WriteFile(filepath.Join(dir, "f.txt"), []byte("abc"), 0o644))
 
 	input, _ := jsonObject("path", "f.txt", "old_str", "zzz", "new_str", "y")
-	if _, err := NewEditFile(workspaceFor(t, dir)).Run(testCtx(), input); err == nil {
+	if _, err := NewEditFile(workspaceFor(t, dir)).Run(t.Context(), input); err == nil {
 		t.Fatal("old_str がマッチしない編集はエラーになるべき")
 	}
 }

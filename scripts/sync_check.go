@@ -22,13 +22,14 @@ package main
 
 import (
 	"bytes"
+	"cmp"
 	"fmt"
 	"go/ast"
 	"go/parser"
 	"go/token"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 )
 
@@ -88,7 +89,7 @@ func compareTrees(finalDir, stepDir, marker string) ([]string, error) {
 			rels = append(rels, rel)
 		}
 	}
-	sort.Strings(rels)
+	slices.Sort(rels)
 
 	for _, rel := range rels {
 		diff, err := compareFile(filepath.Join(finalDir, rel), filepath.Join(stepDir, rel), finalDir, stepDir, marker)
@@ -254,7 +255,7 @@ func typeName(expr ast.Expr) string {
 // step側が長い、穴で不要になったimportがfinal側だけにある)ため、行数を
 // 保つと以降の行が丸ごとずれて、無関係な差分の山になる。
 func mask(src string, spans []span) string {
-	sort.Slice(spans, func(i, j int) bool { return spans[i].start < spans[j].start })
+	slices.SortFunc(spans, func(a, b span) int { return cmp.Compare(a.start, b.start) })
 	var b bytes.Buffer
 	prev := 0
 	for _, s := range spans {
@@ -274,7 +275,7 @@ func mask(src string, spans []span) string {
 func firstDiff(want, got string) string {
 	wantLines := strings.Split(want, "\n")
 	gotLines := strings.Split(got, "\n")
-	for i := 0; i < len(wantLines) || i < len(gotLines); i++ {
+	for i := range max(len(wantLines), len(gotLines)) {
 		if lineAt(wantLines, i) == lineAt(gotLines, i) {
 			continue
 		}

@@ -58,10 +58,11 @@ func TestExecutables(t *testing.T) {
 		t.Fatalf("実行されるものが漏れている: %+v", list)
 	}
 
-	joined := ""
+	var lines []string
 	for _, e := range list {
-		joined += e.Source + " / " + e.Command + "\n"
+		lines = append(lines, e.Source+" / "+e.Command)
 	}
+	joined := strings.Join(lines, "\n")
 	for _, want := range []string{
 		"weather-server --port 8080", // 引数まで見せないと判断できない
 		"ls, go",                     // allowlist も「承認を省く」という判断

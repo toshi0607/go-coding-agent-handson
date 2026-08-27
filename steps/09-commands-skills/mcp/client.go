@@ -29,6 +29,7 @@ import (
 	"fmt"
 	"io"
 	"os/exec"
+	"strings"
 	"time"
 )
 
@@ -328,16 +329,16 @@ func (c *Client) CallTool(ctx context.Context, name string, arguments json.RawMe
 		return "", err
 	}
 
-	var text string
+	var text strings.Builder
 	for _, content := range result.Content {
 		if content.Type == "text" {
-			text += content.Text
+			text.WriteString(content.Text)
 		}
 	}
 	if result.IsError {
-		return "", fmt.Errorf("MCPツール %s がエラーを返しました: %s", name, text)
+		return "", fmt.Errorf("MCPツール %s がエラーを返しました: %s", name, text.String())
 	}
-	return text, nil
+	return text.String(), nil
 }
 
 // prefixWriter は書き込みの各行の先頭に固定の文字列を足す io.Writer。

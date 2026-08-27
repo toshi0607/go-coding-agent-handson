@@ -73,6 +73,12 @@ func (w *Workspace) Root() string { return w.root }
 //   - 検証してから実際に読み書きするまでの隙にパスを差し替えられる
 //     レース(TOCTOU)。edit_file の新規作成では O_EXCL を併用して
 //     この隙を狭めている。
+//
+// なお Go 1.24 で標準ライブラリに os.Root が入った。openat 方式で
+// ディレクトリ配下だけを開くため、ここで挙げた 3・4 の脱出や TOCTOU に
+// 標準ライブラリだけで対抗できる(ハードリンクを防げない点は同じ)。
+// 実務ではまず os.Root を検討すること。この教材で手組みしているのは、
+// 何をどう防ぐ必要があるのかという脱出経路そのものを学ぶためである。
 func (w *Workspace) Resolve(path string) (string, error) {
 	if path == "" {
 		path = "."

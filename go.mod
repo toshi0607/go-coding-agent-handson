@@ -1,6 +1,6 @@
 module github.com/toshi0607/go-coding-agent-handson
 
-go 1.24
+go 1.26
 
 require github.com/anthropics/anthropic-sdk-go v1.61.0
 
