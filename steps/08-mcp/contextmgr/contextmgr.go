@@ -103,8 +103,8 @@ const summaryPrompt = `これまでの会話を、この続きから作業を再
 - 未完了のタスクと次にやるべきこと
 要約以外の文章(前置きなど)は不要です。`
 
-// summaryMaxTokens は要約1回分の出力上限。
-const summaryMaxTokens = 4096
+// summaryMaxTokens は要約1回分の出力上限。既定のモデルでは思考の分もここに数えられる。
+const summaryMaxTokens = 8192
 
 // Compact は会話履歴を要約して置き換える。
 //

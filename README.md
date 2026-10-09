@@ -82,10 +82,10 @@ go run ../final
 go run ../final -p "hello/main.go のバグを直して"
 ```
 
-モデルは環境変数で変更できます(デフォルト: claude-opus-5):
+モデルは環境変数で変更できます(デフォルト: claude-opus-5-5):
 
 ```bash
-export ANTHROPIC_MODEL=claude-sonnet-5
+export ANTHROPIC_MODEL=claude-sonnet-5-5
 ```
 
 ## 作業ディレクトリの設定ファイル

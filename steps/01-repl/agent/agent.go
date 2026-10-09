@@ -21,7 +21,10 @@ import (
 )
 
 // maxTokensPerTurn は1回のLLM呼び出しの出力上限。
-const maxTokensPerTurn = 8192
+// 既定のモデルは常に思考(thinking)し、その分もこの上限に数えられるので、
+// 見える応答の長さだけで決めると足りなくなる。一方、ストリーミングしない
+// 呼び出しでもHTTPタイムアウトに収まるよう、大きくしすぎてもいない。
+const maxTokensPerTurn = 16000
 
 // Config はエージェントの構成。
 type Config struct {

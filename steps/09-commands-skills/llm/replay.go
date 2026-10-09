@@ -73,7 +73,7 @@ func buildResponse(content []map[string]any, stopReason string) string {
 		"id":          "msg_replay",
 		"type":        "message",
 		"role":        "assistant",
-		"model":       "claude-opus-5",
+		"model":       "claude-opus-5-5",
 		"content":     content,
 		"stop_reason": stopReason,
 		"usage":       map[string]any{"input_tokens": 100, "output_tokens": 50},

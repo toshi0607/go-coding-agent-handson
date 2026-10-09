@@ -39,7 +39,7 @@ func allowAll(names ...string) *permission.Checker {
 
 func TestTextOnlyTurn(t *testing.T) {
 	client := llm.NewReplayClient(llm.TextResponse("こんにちは!"))
-	a := New(Config{Client: client, Model: "claude-opus-5"})
+	a := New(Config{Client: client, Model: "claude-opus-5-5"})
 
 	got, err := a.Run(t.Context(), "やあ")
 	if err != nil {
@@ -61,7 +61,7 @@ func TestToolLoop(t *testing.T) {
 		llm.TextResponse("現在時刻は12:34です"),
 	)
 	a := New(Config{
-		Client: client, Model: "claude-opus-5",
+		Client: client, Model: "claude-opus-5-5",
 		Tools:      []tools.Tool{tool},
 		Permission: allowAll("get_time"),
 	})
@@ -101,7 +101,7 @@ func TestDeniedToolReturnsErrorResult(t *testing.T) {
 	)
 	// Askerなし → 承認が必要なツールは拒否される。
 	a := New(Config{
-		Client: client, Model: "claude-opus-5",
+		Client: client, Model: "claude-opus-5-5",
 		Tools:      []tools.Tool{tool},
 		Permission: permission.New(permission.Config{}),
 	})
@@ -128,7 +128,7 @@ func TestUnknownToolReturnsError(t *testing.T) {
 		llm.ToolUseResponse("toolu_1", "no_such_tool", `{}`),
 		llm.TextResponse("失礼しました"),
 	)
-	a := New(Config{Client: client, Model: "claude-opus-5"})
+	a := New(Config{Client: client, Model: "claude-opus-5-5"})
 
 	if _, err := a.Run(t.Context(), "何かして"); err != nil {
 		t.Fatalf("未知ツールもエラー結果として返して継続するはず: %v", err)
@@ -148,7 +148,7 @@ func TestMaxIterationsStopsRunawayLoop(t *testing.T) {
 		llm.ToolUseResponse("toolu_3", "spin", `{}`),
 	)
 	a := New(Config{
-		Client: client, Model: "claude-opus-5",
+		Client: client, Model: "claude-opus-5-5",
 		Tools:         []tools.Tool{tool},
 		Permission:    allowAll("spin"),
 		MaxIterations: 2,
@@ -171,12 +171,12 @@ func TestMaxIterationsStopsRunawayLoop(t *testing.T) {
 // リクエストがAPIに拒否されて会話が死ぬ。その回帰テスト。
 func TestInterruptedToolUseIsClosedOut(t *testing.T) {
 	// stop_reason: max_tokens だが tool_use ブロックを含む応答。
-	interrupted := `{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5",
+	interrupted := `{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5-5",
 		"content":[{"type":"text","text":"編集します"},
 		           {"type":"tool_use","id":"toolu_cut","name":"edit_file","input":{}}],
 		"stop_reason":"max_tokens","usage":{"input_tokens":10,"output_tokens":5}}`
 	client := llm.NewReplayClient(interrupted, llm.TextResponse("2ターン目の応答"))
-	a := New(Config{Client: client, Model: "claude-opus-5", Permission: allowAll()})
+	a := New(Config{Client: client, Model: "claude-opus-5-5", Permission: allowAll()})
 
 	if _, err := a.Run(t.Context(), "a.goを直して"); err != nil {
 		t.Fatalf("Run: %v", err)
@@ -202,11 +202,11 @@ func TestInterruptedToolUseIsClosedOut(t *testing.T) {
 // stop_reason が tool_use なのに tool_use ブロックがない矛盾応答。
 // 空のuserメッセージを送らず、上限まで無駄な往復もしないこと。
 func TestToolUseStopReasonWithoutToolBlocks(t *testing.T) {
-	inconsistent := `{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5",
+	inconsistent := `{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5-5",
 		"content":[{"type":"text","text":"考え中"}],
 		"stop_reason":"tool_use","usage":{"input_tokens":10,"output_tokens":5}}`
 	client := llm.NewReplayClient(inconsistent)
-	a := New(Config{Client: client, Model: "claude-opus-5"})
+	a := New(Config{Client: client, Model: "claude-opus-5-5"})
 
 	got, err := a.Run(t.Context(), "何かして")
 	if err != nil {

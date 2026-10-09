@@ -32,7 +32,7 @@ import (
 )
 
 // defaultModel は使用するモデル。環境変数 ANTHROPIC_MODEL で上書きできる。
-const defaultModel = anthropic.Model("claude-opus-5")
+const defaultModel = anthropic.Model("claude-opus-5-5")
 
 func main() {
 	oneShot := flag.String("p", "", "対話モードの代わりに、この1つの依頼を実行して終了する")
