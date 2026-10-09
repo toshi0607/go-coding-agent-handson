@@ -10,9 +10,13 @@
 //   - 標準入出力を通じて、改行区切りのJSON-RPC 2.0メッセージを交換する
 //
 // だけである。使うメソッドは3つ:
-//   - initialize:  ハンドシェイク(バージョンと能力のすり合わせ)
-//   - tools/list:  サーバーが提供するツールの一覧を取得
-//   - tools/call:  ツールを実行
+//   - server/discover: サーバーが対応するバージョンと能力を問い合わせる
+//   - tools/list:      サーバーが提供するツールの一覧を取得
+//   - tools/call:      ツールを実行
+//
+// 接続に状態はない。「最初に名乗って以後はそれを前提にする」のではなく、
+// どのリクエストも自分のプロトコルバージョンを _meta に入れて送り、
+// サーバーは1件ずつ独立に受け付けるか拒否するかを決める。
 //
 // 素朴なぶん、相手が「他人の書いたプロセス」であることの難しさは
 // こちらが引き受けることになる。応答が返ってこない、終了させても
@@ -26,15 +30,27 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"maps"
 	"os/exec"
+	"slices"
 	"strings"
 	"time"
 )
 
 // protocolVersion はこのクライアントが話すMCPのプロトコルバージョン。
-const protocolVersion = "2025-06-18"
+//
+// 2026-07-28 版でMCPはステートレスになった。それ以前の版にあった
+// initialize ハンドシェイクは廃止され、バージョンとクライアントの能力は
+// リクエストごとに _meta で送る。このクライアントが話すのはこの方式だけで、
+// ハンドシェイク方式しか話せない古いサーバーには接続できない。
+const protocolVersion = "2026-07-28"
+
+// errUnsupportedProtocolVersion は、サーバーが要求されたバージョンに
+// 対応していないことを示すJSON-RPCエラーコード。
+const errUnsupportedProtocolVersion = -32022
 
 const (
 	// callTimeout は1回のリクエストの応答待ち上限。
@@ -93,7 +109,7 @@ type Client struct {
 	readDone chan struct{}
 }
 
-// Connect はMCPサーバーを子プロセスとして起動し、ハンドシェイクまで済ませる。
+// Connect はMCPサーバーを子プロセスとして起動し、話が通じる相手かを確かめる。
 func Connect(ctx context.Context, s Server) (*Client, error) {
 	cmd := exec.CommandContext(ctx, s.Command, s.Args...)
 	stdin, err := cmd.StdinPipe()
@@ -117,9 +133,9 @@ func Connect(ctx context.Context, s Server) (*Client, error) {
 
 	c := newClient(s.Name, stdin, stdout)
 	c.cmd = cmd
-	if err := c.initialize(ctx); err != nil {
+	if err := c.discover(ctx); err != nil {
 		_ = cmd.Process.Kill()
-		return nil, fmt.Errorf("MCPサーバー %s の初期化に失敗: %w", s.Name, err)
+		return nil, fmt.Errorf("MCPサーバー %s に接続できません: %w", s.Name, err)
 	}
 	return c, nil
 }
@@ -202,8 +218,9 @@ type response struct {
 }
 
 type rpcError struct {
-	Code    int    `json:"code"`
-	Message string `json:"message"`
+	Code    int             `json:"code"`
+	Message string          `json:"message"`
+	Data    json.RawMessage `json:"data"`
 }
 
 func (e *rpcError) Error() string {
@@ -215,9 +232,15 @@ func (e *rpcError) Error() string {
 // 待ち時間には必ず上限を置く。ここで無期限に待つと、応答しない
 // サーバーが1つあるだけでエージェントが固まり、Ctrl-Cしか
 // 残らなくなる。ctx は呼び出し側のキャンセル(Ctrl-C)も運んでくる。
-func (c *Client) call(ctx context.Context, method string, params any, result any) error {
+func (c *Client) call(ctx context.Context, method string, params map[string]any, result any) error {
 	ctx, cancel := context.WithTimeout(ctx, callTimeout)
 	defer cancel()
+
+	params = maps.Clone(params)
+	if params == nil {
+		params = make(map[string]any)
+	}
+	params["_meta"] = requestMeta()
 
 	c.nextID++
 	id := c.nextID
@@ -276,22 +299,79 @@ func (c *Client) send(req request) error {
 	return err
 }
 
-// initialize はMCPのハンドシェイクを行う。
-// initialize リクエスト → 応答 → initialized 通知、の3ステップ。
-func (c *Client) initialize(ctx context.Context) error {
-	params := map[string]any{
-		"protocolVersion": protocolVersion,
-		"capabilities":    map[string]any{},
-		"clientInfo": map[string]any{
+// requestMeta は全リクエストの _meta に入れる、プロトコル上の必須情報を返す。
+//
+// ハンドシェイクがないので、サーバーはこれを見て初めて「相手がどの版を
+// 話していて、何ができるクライアントなのか」を知る。能力(capabilities)が
+// 空なのは、このクライアントがサーバーからの追加入力の要求などに
+// 一切対応しないことの宣言である。
+func requestMeta() map[string]any {
+	return map[string]any{
+		"io.modelcontextprotocol/protocolVersion":    protocolVersion,
+		"io.modelcontextprotocol/clientCapabilities": map[string]any{},
+		"io.modelcontextprotocol/clientInfo": map[string]any{
 			"name":    "go-coding-agent-handson",
 			"version": "0.1.0",
 		},
 	}
-	if err := c.call(ctx, "initialize", params, nil); err != nil {
+}
+
+// discover は server/discover でサーバーが対応するバージョンを問い合わせ、
+// このクライアントと話が通じる相手かを確かめる。
+//
+// 仕様上、この問い合わせは省略できる。いきなり tools/list を送り、
+// バージョンが合わなければエラーで知る、でも動く。それでも最初に
+// 送るのは、ハンドシェイク方式の古いサーバーを確実に見分けるためである。
+// 古いサーバーの中には initialize を経ていないリクエストでも
+// 処理してしまうものがあり、tools/call は新旧どちらの版にもある。
+// 確かめずに進むと、古い流儀のまま半端に動いてしまう。
+func (c *Client) discover(ctx context.Context) error {
+	var result struct {
+		ResultType        string   `json:"resultType"`
+		SupportedVersions []string `json:"supportedVersions"`
+	}
+	if err := c.call(ctx, "server/discover", nil, &result); err != nil {
+		if rpcErr, ok := errors.AsType[*rpcError](err); ok && rpcErr.Code == errUnsupportedProtocolVersion {
+			var data struct {
+				Supported []string `json:"supported"`
+			}
+			if err := json.Unmarshal(rpcErr.Data, &data); err != nil {
+				return fmt.Errorf("サーバーが対応する版のパースに失敗: %w", err)
+			}
+			return unsupportedProtocolVersion(data.Supported)
+		}
+		return fmt.Errorf("server/discover に失敗しました。MCP %s より前の、initialize ハンドシェイク方式のサーバーかもしれません: %w", protocolVersion, err)
+	}
+	if err := checkResultType(result.ResultType); err != nil {
 		return err
 	}
-	// initialized は通知なのでIDを付けず、応答も待たない。
-	return c.send(request{Jsonrpc: "2.0", Method: "notifications/initialized"})
+	if !slices.Contains(result.SupportedVersions, protocolVersion) {
+		return unsupportedProtocolVersion(result.SupportedVersions)
+	}
+	return nil
+}
+
+func unsupportedProtocolVersion(supported []string) error {
+	return fmt.Errorf("サーバーはMCP %s に対応していません(サーバーが対応する版: %s)", protocolVersion, strings.Join(supported, ", "))
+}
+
+// checkResultType は結果の種別を確かめる。
+//
+// 2026-07-28 版の結果には必ず resultType が付く。"complete" が通常の
+// 完了で、"input_required" は「続けるには追加の入力が要る」という
+// サーバーからの差し戻しである。このクライアントは能力を何も宣言して
+// いないので差し戻しは来ないはずだが、来たら黙って空の結果として
+// 扱わず、エラーにする。フィールドが無い場合は完了とみなす
+// (古い版のサーバーとの互換のため、仕様がそう定めている)。
+func checkResultType(resultType string) error {
+	switch resultType {
+	case "", "complete":
+		return nil
+	case "input_required":
+		return errors.New("サーバーが追加の入力を要求しましたが、このクライアントは対応していません")
+	default:
+		return fmt.Errorf("不明な resultType: %q", resultType)
+	}
 }
 
 // ToolInfo はサーバーが提供するツールのメタデータ。
@@ -304,9 +384,13 @@ type ToolInfo struct {
 // ListTools はサーバーが提供するツールの一覧を取得する。
 func (c *Client) ListTools(ctx context.Context) ([]ToolInfo, error) {
 	var result struct {
-		Tools []ToolInfo `json:"tools"`
+		ResultType string     `json:"resultType"`
+		Tools      []ToolInfo `json:"tools"`
 	}
-	if err := c.call(ctx, "tools/list", map[string]any{}, &result); err != nil {
+	if err := c.call(ctx, "tools/list", nil, &result); err != nil {
+		return nil, err
+	}
+	if err := checkResultType(result.ResultType); err != nil {
 		return nil, err
 	}
 	return result.Tools, nil
@@ -319,13 +403,18 @@ func (c *Client) CallTool(ctx context.Context, name string, arguments json.RawMe
 		"arguments": arguments,
 	}
 	var result struct {
-		Content []struct {
+		ResultType string `json:"resultType"`
+		Content    []struct {
 			Type string `json:"type"`
 			Text string `json:"text"`
 		} `json:"content"`
 		IsError bool `json:"isError"`
 	}
 	if err := c.call(ctx, "tools/call", params, &result); err != nil {
+		return "", err
+	}
+
+	if err := checkResultType(result.ResultType); err != nil {
 		return "", err
 	}
 
