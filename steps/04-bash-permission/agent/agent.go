@@ -24,7 +24,10 @@ import (
 
 const (
 	// maxTokensPerTurn は1回のLLM呼び出しの出力上限。
-	maxTokensPerTurn = 8192
+	// 既定のモデルは常に思考(thinking)し、その分もこの上限に数えられるので、
+	// 見える応答の長さだけで決めると足りなくなる。一方、ストリーミングしない
+	// 呼び出しでもHTTPタイムアウトに収まるよう、大きくしすぎてもいない。
+	maxTokensPerTurn = 16000
 
 	// maxDisplayRunes はツール実行を画面に表示するときの引数の文字数上限。
 	maxDisplayRunes = 120

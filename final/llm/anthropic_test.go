@@ -48,7 +48,7 @@ func sse(name, data string) string {
 
 func TestStreamAccumulatesTextAndToolUse(t *testing.T) {
 	client := newSSEClient(t, []string{
-		sse("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}`),
+		sse("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5-5","content":[],"stop_reason":null,"usage":{"input_tokens":10,"output_tokens":0}}}`),
 		// 1つ目のブロック: テキストが3分割で届く。
 		sse("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
 		sse("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ファイルを"}}`),
@@ -66,7 +66,7 @@ func TestStreamAccumulatesTextAndToolUse(t *testing.T) {
 
 	var streamed strings.Builder
 	resp, err := client.Stream(t.Context(), anthropic.MessageNewParams{
-		Model:     "claude-opus-5",
+		Model:     "claude-opus-5-5",
 		MaxTokens: 100,
 		Messages:  []anthropic.MessageParam{anthropic.NewUserMessage(anthropic.NewTextBlock("main.goを読んで"))},
 	}, func(s string) { streamed.WriteString(s) })
@@ -118,7 +118,7 @@ func TestStreamAccumulatesTextAndToolUse(t *testing.T) {
 // onText が nil でも落ちないこと(サブエージェントは表示しない)。
 func TestStreamWithoutCallback(t *testing.T) {
 	client := newSSEClient(t, []string{
-		sse("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5","content":[],"stop_reason":null,"usage":{"input_tokens":1,"output_tokens":0}}}`),
+		sse("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5-5","content":[],"stop_reason":null,"usage":{"input_tokens":1,"output_tokens":0}}}`),
 		sse("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}`),
 		sse("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"了解"}}`),
 		sse("content_block_stop", `{"type":"content_block_stop","index":0}`),
@@ -127,7 +127,7 @@ func TestStreamWithoutCallback(t *testing.T) {
 	})
 
 	resp, err := client.Stream(t.Context(), anthropic.MessageNewParams{
-		Model: "claude-opus-5", MaxTokens: 100,
+		Model: "claude-opus-5-5", MaxTokens: 100,
 	}, nil)
 	if err != nil {
 		t.Fatalf("Stream: %v", err)
@@ -142,12 +142,12 @@ func TestStreamWithoutCallback(t *testing.T) {
 // 壊れた履歴が積まれて以降のリクエストが通らなくなる。
 func TestStreamReportsServerError(t *testing.T) {
 	client := newSSEClient(t, []string{
-		sse("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5","content":[],"stop_reason":null,"usage":{"input_tokens":1,"output_tokens":0}}}`),
+		sse("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5-5","content":[],"stop_reason":null,"usage":{"input_tokens":1,"output_tokens":0}}}`),
 		sse("error", `{"type":"error","error":{"type":"overloaded_error","message":"Overloaded"}}`),
 	})
 
 	if _, err := client.Stream(t.Context(), anthropic.MessageNewParams{
-		Model: "claude-opus-5", MaxTokens: 100,
+		Model: "claude-opus-5-5", MaxTokens: 100,
 	}, nil); err == nil {
 		t.Fatal("ストリーム中のエラーが握りつぶされている")
 	}

@@ -10,7 +10,7 @@ import (
 
 func TestTextOnlyTurn(t *testing.T) {
 	client := llm.NewReplayClient(llm.TextResponse("こんにちは!"))
-	a := New(Config{Client: client, Model: "claude-opus-5"})
+	a := New(Config{Client: client, Model: "claude-opus-5-5"})
 
 	got, err := a.Run(t.Context(), "やあ")
 	if err != nil {
@@ -36,7 +36,7 @@ func TestHistoryCarriesAcrossTurns(t *testing.T) {
 		llm.TextResponse("こんにちは、Gopherさん!"),
 		llm.TextResponse("あなたの名前はGopherさんです"),
 	)
-	a := New(Config{Client: client, Model: "claude-opus-5"})
+	a := New(Config{Client: client, Model: "claude-opus-5-5"})
 
 	if _, err := a.Run(t.Context(), "私はGopherです"); err != nil {
 		t.Fatal(err)

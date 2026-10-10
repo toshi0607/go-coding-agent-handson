@@ -76,7 +76,7 @@ func TestCompact(t *testing.T) {
 		anthropic.NewAssistantMessage(anthropic.NewTextBlock("実装しました")),
 	}
 	base := anthropic.MessageNewParams{
-		Model:    "claude-opus-5",
+		Model:    "claude-opus-5-5",
 		System:   []anthropic.TextBlockParam{{Text: "あなたはエージェントです"}},
 		Messages: history,
 	}
@@ -116,7 +116,7 @@ func TestCompactKeepsToolsAndSystem(t *testing.T) {
 	m := NewManager()
 
 	base := anthropic.MessageNewParams{
-		Model:  "claude-opus-5",
+		Model:  "claude-opus-5-5",
 		System: []anthropic.TextBlockParam{{Text: "あなたはエージェントです"}},
 		Tools: []anthropic.ToolUnionParam{{OfTool: &anthropic.ToolParam{
 			Name:        "read_file",

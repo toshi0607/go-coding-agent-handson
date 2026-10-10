@@ -36,7 +36,7 @@ example/        エージェントを動かして遊ぶためのサンプル作�
 
 ## 必要環境
 
-- Go 1.26以降
+- Go 1.27以降
 - AnthropicのAPIキー(**任意**)。steps/ の学習・テスト・`make check` には不要です。完成したエージェントを実際に動かすとき([動かし方](#動かし方))だけ必要になります
 
 ## 進め方(steps/)
@@ -82,10 +82,10 @@ go run ../final
 go run ../final -p "hello/main.go のバグを直して"
 ```
 
-モデルは環境変数で変更できます(デフォルト: claude-opus-5):
+モデルは環境変数で変更できます(デフォルト: claude-opus-5-5):
 
 ```bash
-export ANTHROPIC_MODEL=claude-sonnet-5
+export ANTHROPIC_MODEL=claude-sonnet-5-5
 ```
 
 ## 作業ディレクトリの設定ファイル
@@ -101,6 +101,8 @@ export ANTHROPIC_MODEL=claude-sonnet-5
 | `.mcp.json` | 接続するMCPサーバーの定義 |
 
 書き方は `example/` の実物を参照してください。
+
+MCPクライアントが話すのは 2026-07-28 版(ステートレス方式)だけです。それより前の、`initialize` ハンドシェイクを前提とするサーバーを `.mcp.json` に書くと、そのサーバーには接続せず、理由を示す警告を出して起動を続けます。
 
 ### 設定ファイルは実行権限そのもの
 

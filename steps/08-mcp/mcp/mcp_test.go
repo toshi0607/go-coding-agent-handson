@@ -26,6 +26,16 @@ type rawRequest struct {
 // 子プロセスの代わりに io.Pipe で接続し、プロトコルのやり取りを検証する。
 func startFakeServer(t *testing.T, handle serverFunc) *Client {
 	t.Helper()
+	c := newFakeClient(t, handle)
+	if err := c.discover(t.Context()); err != nil {
+		t.Fatalf("discover: %v", err)
+	}
+	return c
+}
+
+// newFakeClient は接続時の問い合わせをせず、失敗するサーバーも検証できるようにする。
+func newFakeClient(t *testing.T, handle serverFunc) *Client {
+	t.Helper()
 	clientReader, serverWriter := io.Pipe()
 	serverReader, clientWriter := io.Pipe()
 
@@ -39,7 +49,7 @@ func startFakeServer(t *testing.T, handle serverFunc) *Client {
 				return
 			}
 			if req.ID == nil {
-				continue // notifications/initialized などの通知は応答不要
+				continue // 通知は応答不要
 			}
 			handle(t, req, serverWriter)
 		}
@@ -47,9 +57,6 @@ func startFakeServer(t *testing.T, handle serverFunc) *Client {
 
 	c := newClient("weather", clientWriter, clientReader)
 	t.Cleanup(func() { _ = c.Close() })
-	if err := c.initialize(t.Context()); err != nil {
-		t.Fatalf("initialize: %v", err)
-	}
 	return c
 }
 
@@ -63,17 +70,37 @@ func writeResult(t *testing.T, w io.Writer, id int, result any) {
 	_, _ = w.Write(append(resp, '\n'))
 }
 
+// writeDiscover はこのクライアントの版に対応するサーバーの正常応答を書く。
+func writeDiscover(t *testing.T, w io.Writer, id int) {
+	t.Helper()
+	writeResult(t, w, id, map[string]any{
+		"resultType":        "complete",
+		"supportedVersions": []string{protocolVersion},
+		"capabilities":      map[string]any{"tools": map[string]any{}},
+	})
+}
+
+// writeError はJSON-RPCエラーと、その理由を示すデータを書く。
+func writeError(t *testing.T, w io.Writer, id, code int, message string, data any) {
+	t.Helper()
+	resp, err := json.Marshal(map[string]any{
+		"jsonrpc": "2.0", "id": id,
+		"error": map[string]any{"code": code, "message": message, "data": data},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, _ = w.Write(append(resp, '\n'))
+}
+
 // weatherServer は get_weather ツールを1つ持つ標準的な疑似サーバー。
 func weatherServer(t *testing.T, req rawRequest, w io.Writer) {
 	switch req.Method {
-	case "initialize":
-		writeResult(t, w, *req.ID, map[string]any{
-			"protocolVersion": protocolVersion,
-			"capabilities":    map[string]any{},
-			"serverInfo":      map[string]any{"name": "fake", "version": "0.0.1"},
-		})
+	case "server/discover":
+		writeDiscover(t, w, *req.ID)
 	case "tools/list":
 		writeResult(t, w, *req.ID, map[string]any{
+			"resultType": "complete",
 			"tools": []map[string]any{{
 				"name":        "get_weather",
 				"description": "天気を返す",
@@ -91,8 +118,187 @@ func weatherServer(t *testing.T, req rawRequest, w io.Writer) {
 		}
 		_ = json.Unmarshal(req.Params, &p)
 		writeResult(t, w, *req.ID, map[string]any{
-			"content": []map[string]any{{"type": "text", "text": "晴れ (" + p.Name + ")"}},
+			"resultType": "complete",
+			"content":    []map[string]any{{"type": "text", "text": "晴れ (" + p.Name + ")"}},
 		})
+	}
+}
+
+// 各リクエストに版と能力がなければ、サーバーは独立に受け付ける判断ができない。
+func TestRequestsCarryProtocolMeta(t *testing.T) {
+	c := startFakeServer(t, func(t *testing.T, req rawRequest, w io.Writer) {
+		var params map[string]json.RawMessage
+		if err := json.Unmarshal(req.Params, &params); err != nil {
+			t.Errorf("params: %v", err)
+		}
+		var meta map[string]json.RawMessage
+		if err := json.Unmarshal(params["_meta"], &meta); err != nil {
+			t.Errorf("_meta: %v", err)
+		}
+		var version string
+		if err := json.Unmarshal(meta["io.modelcontextprotocol/protocolVersion"], &version); err != nil {
+			t.Errorf("protocolVersion: %v", err)
+		}
+		if version != protocolVersion {
+			t.Errorf("%s の版: got %q, want %q", req.Method, version, protocolVersion)
+		}
+		var capabilities map[string]any
+		if err := json.Unmarshal(meta["io.modelcontextprotocol/clientCapabilities"], &capabilities); err != nil {
+			t.Errorf("clientCapabilities: %v", err)
+		}
+		if capabilities == nil || len(capabilities) != 0 {
+			t.Errorf("能力は空のオブジェクトのはず: %v", capabilities)
+		}
+		var info struct {
+			Name    string `json:"name"`
+			Version string `json:"version"`
+		}
+		if err := json.Unmarshal(meta["io.modelcontextprotocol/clientInfo"], &info); err != nil {
+			t.Errorf("clientInfo: %v", err)
+		}
+		if info.Name != "go-coding-agent-handson" || info.Version != "0.1.0" {
+			t.Errorf("クライアント情報: %+v", info)
+		}
+		if req.Method == "server/discover" || req.Method == "tools/list" {
+			if len(params) != 1 {
+				t.Errorf("%s のparamsは_metaだけのはず: %s", req.Method, req.Params)
+			}
+		}
+		if req.Method == "tools/call" {
+			if string(params["name"]) != `"get_weather"` || string(params["arguments"]) != `{"city":"Tokyo"}` {
+				t.Errorf("ツール名や引数が失われている: %s", req.Params)
+			}
+		}
+		weatherServer(t, req, w)
+	})
+	if _, err := c.ListTools(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := c.CallTool(t.Context(), "get_weather", json.RawMessage(`{"city":"Tokyo"}`)); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// 古いサーバーを接続時に見分けないと、新旧の流儀が混ざったまま動いてしまう。
+func TestDiscoverRejectsLegacyServer(t *testing.T) {
+	c := newFakeClient(t, func(t *testing.T, req rawRequest, w io.Writer) {
+		if req.Method != "server/discover" {
+			t.Errorf("最初のメソッド: %q", req.Method)
+		}
+		writeError(t, w, *req.ID, -32601, "Method not found", nil)
+	})
+	err := c.discover(t.Context())
+	if err == nil || !strings.Contains(err.Error(), "initialize") {
+		t.Fatalf("古い方式と分かるエラーが必要: %v", err)
+	}
+}
+
+// 非対応の版を報告しないと、利用者は接続先が話せる版を判断できない。
+func TestDiscoverReportsUnsupportedVersion(t *testing.T) {
+	for _, responseType := range []string{"error", "result"} {
+		t.Run(responseType, func(t *testing.T) {
+			c := newFakeClient(t, func(t *testing.T, req rawRequest, w io.Writer) {
+				if responseType == "error" {
+					writeError(t, w, *req.ID, -32022, "Unsupported protocol version", map[string]any{
+						"supported": []string{"2027-01-01"}, "requested": protocolVersion,
+					})
+					return
+				}
+				writeResult(t, w, *req.ID, map[string]any{
+					"resultType": "complete", "supportedVersions": []string{"2027-01-01"},
+				})
+			})
+			err := c.discover(t.Context())
+			if err == nil || !strings.Contains(err.Error(), "2027-01-01") || !strings.Contains(err.Error(), protocolVersion) {
+				t.Fatalf("要求した版と対応する版を含むエラーが必要: %v", err)
+			}
+		})
+	}
+}
+
+// 追加入力の要求を空の成功結果と扱うと、ツールが完了したように見えてしまう。
+func TestInputRequiredResultIsError(t *testing.T) {
+	c := startFakeServer(t, func(t *testing.T, req rawRequest, w io.Writer) {
+		if req.Method == "server/discover" {
+			writeDiscover(t, w, *req.ID)
+			return
+		}
+		writeResult(t, w, *req.ID, map[string]any{"resultType": "input_required", "content": []any{}})
+	})
+	if _, err := c.CallTool(t.Context(), "get_weather", json.RawMessage(`{}`)); err == nil {
+		t.Fatal("追加入力の要求がエラーになっていない")
+	}
+}
+
+// 結果の種別が省略された応答を拒否すると、仕様上有効な完了結果も使えない。
+func TestMissingResultTypeMeansComplete(t *testing.T) {
+	c := startFakeServer(t, func(t *testing.T, req rawRequest, w io.Writer) {
+		switch req.Method {
+		case "server/discover":
+			writeDiscover(t, w, *req.ID)
+		case "tools/list":
+			writeResult(t, w, *req.ID, map[string]any{"tools": []map[string]any{{"name": "get_weather"}}})
+		case "tools/call":
+			writeResult(t, w, *req.ID, map[string]any{"content": []map[string]any{{"type": "text", "text": "晴れ"}}})
+		}
+	})
+	infos, err := c.ListTools(t.Context())
+	if err != nil || len(infos) != 1 || infos[0].Name != "get_weather" {
+		t.Fatalf("省略された種別の一覧結果: %+v, %v", infos, err)
+	}
+	got, err := c.CallTool(t.Context(), "get_weather", json.RawMessage(`{}`))
+	if err != nil || got != "晴れ" {
+		t.Fatalf("省略された種別の実行結果: %q, %v", got, err)
+	}
+}
+
+// 未知の種別を受け入れると、解釈できない結果が成功として返ってしまう。
+func TestInvalidResultTypeIsError(t *testing.T) {
+	for _, method := range []string{"server/discover", "tools/list", "tools/call"} {
+		t.Run(method, func(t *testing.T) {
+			c := newFakeClient(t, func(t *testing.T, req rawRequest, w io.Writer) {
+				writeResult(t, w, *req.ID, map[string]any{
+					"resultType": "unknown", "supportedVersions": []string{protocolVersion},
+				})
+			})
+			var err error
+			switch method {
+			case "server/discover":
+				err = c.discover(t.Context())
+			case "tools/list":
+				_, err = c.ListTools(t.Context())
+			case "tools/call":
+				_, err = c.CallTool(t.Context(), "get_weather", json.RawMessage(`{}`))
+			}
+			if err == nil || !strings.Contains(err.Error(), `不明な resultType: "unknown"`) {
+				t.Fatalf("未知の種別を拒否するエラーが必要: %v", err)
+			}
+		})
+	}
+}
+
+// _metaの付与で元の引数を書き換えると、呼び出し側が再利用するデータも変わる。
+func TestCallPreservesParams(t *testing.T) {
+	c := startFakeServer(t, weatherServer)
+	for _, hasMeta := range []bool{false, true} {
+		params := map[string]any{"name": "get_weather", "arguments": json.RawMessage(`{}`)}
+		if hasMeta {
+			params["_meta"] = map[string]any{"caller": "keep"}
+		}
+		before, err := json.Marshal(params)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := c.call(t.Context(), "tools/call", params, nil); err != nil {
+			t.Fatal(err)
+		}
+		after, err := json.Marshal(params)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !bytes.Equal(before, after) {
+			t.Errorf("呼び出し側のparamsが変わった: before %s, after %s", before, after)
+		}
 	}
 }
 
@@ -136,8 +342,8 @@ func TestListAndCallTools(t *testing.T) {
 // これを応答と取り違えると、以降ずっと1つずれた応答を読むことになる。
 func TestCallSkipsNotifications(t *testing.T) {
 	c := startFakeServer(t, func(t *testing.T, req rawRequest, w io.Writer) {
-		if req.Method == "initialize" {
-			writeResult(t, w, *req.ID, map[string]any{"protocolVersion": protocolVersion})
+		if req.Method == "server/discover" {
+			writeDiscover(t, w, *req.ID)
 			return
 		}
 		// 応答の前に通知を2件、別リクエストへの応答を1件混ぜる。
@@ -161,15 +367,11 @@ func TestCallSkipsNotifications(t *testing.T) {
 // サーバーがJSON-RPCのエラーオブジェクトを返した場合。
 func TestCallReturnsRPCError(t *testing.T) {
 	c := startFakeServer(t, func(t *testing.T, req rawRequest, w io.Writer) {
-		if req.Method == "initialize" {
-			writeResult(t, w, *req.ID, map[string]any{"protocolVersion": protocolVersion})
+		if req.Method == "server/discover" {
+			writeDiscover(t, w, *req.ID)
 			return
 		}
-		resp, _ := json.Marshal(map[string]any{
-			"jsonrpc": "2.0", "id": *req.ID,
-			"error": map[string]any{"code": -32601, "message": "Method not found"},
-		})
-		_, _ = w.Write(append(resp, '\n'))
+		writeError(t, w, *req.ID, -32601, "Method not found", nil)
 	})
 
 	_, err := c.ListTools(t.Context())
@@ -189,8 +391,8 @@ func TestCallReturnsRPCError(t *testing.T) {
 // プロトコル層のエラーとツール層のエラーは別物である。
 func TestCallToolIsError(t *testing.T) {
 	c := startFakeServer(t, func(t *testing.T, req rawRequest, w io.Writer) {
-		if req.Method == "initialize" {
-			writeResult(t, w, *req.ID, map[string]any{"protocolVersion": protocolVersion})
+		if req.Method == "server/discover" {
+			writeDiscover(t, w, *req.ID)
 			return
 		}
 		writeResult(t, w, *req.ID, map[string]any{
@@ -212,10 +414,10 @@ func TestCallToolIsError(t *testing.T) {
 // ここが無期限待ちだと、サーバー1つでエージェント全体が沈黙する。
 func TestCallTimesOutOnSilentServer(t *testing.T) {
 	silent := func(t *testing.T, req rawRequest, w io.Writer) {
-		if req.Method == "initialize" {
-			writeResult(t, w, *req.ID, map[string]any{"protocolVersion": protocolVersion})
+		if req.Method == "server/discover" {
+			writeDiscover(t, w, *req.ID)
 		}
-		// initialize 以降は何も返さない。
+		// server/discover 以降は何も返さない。
 	}
 	c := startFakeServer(t, silent)
 
@@ -246,8 +448,8 @@ func TestCallTimesOutOnSilentServer(t *testing.T) {
 func TestLateResponseDoesNotDesyncNextCall(t *testing.T) {
 	c := startFakeServer(t, func(t *testing.T, req rawRequest, w io.Writer) {
 		switch req.Method {
-		case "initialize":
-			writeResult(t, w, *req.ID, map[string]any{"protocolVersion": protocolVersion})
+		case "server/discover":
+			writeDiscover(t, w, *req.ID)
 		case "tools/list":
 			// 1回目は遅れて応答する(呼び出し側は先に諦めている)。
 			time.Sleep(150 * time.Millisecond)
@@ -283,7 +485,7 @@ func TestCallFailsWhenServerExits(t *testing.T) {
 	clientReader, serverWriter := io.Pipe()
 	serverReader, clientWriter := io.Pipe()
 	go func() {
-		// initialize には応答するが、直後に標準出力を閉じて黙る。
+		// server/discover には応答するが、直後に標準出力を閉じて黙る。
 		// 入力は読み続ける(io.Pipe は同期なので、読むのをやめると
 		// クライアント側の書き込みが返ってこなくなる)。
 		scanner := bufio.NewScanner(serverReader)
@@ -295,15 +497,15 @@ func TestCallFailsWhenServerExits(t *testing.T) {
 			first = false
 			var req rawRequest
 			_ = json.Unmarshal(scanner.Bytes(), &req)
-			writeResult(t, serverWriter, *req.ID, map[string]any{"protocolVersion": protocolVersion})
+			writeDiscover(t, serverWriter, *req.ID)
 			_ = serverWriter.Close()
 		}
 	}()
 	t.Cleanup(func() { _ = clientWriter.Close() })
 
 	c := newClient("dead", clientWriter, clientReader)
-	if err := c.initialize(t.Context()); err != nil {
-		t.Fatalf("initialize: %v", err)
+	if err := c.discover(t.Context()); err != nil {
+		t.Fatalf("discover: %v", err)
 	}
 	if _, err := c.ListTools(t.Context()); err == nil {
 		t.Fatal("接続断がエラーになっていない")
@@ -318,9 +520,9 @@ func TestCallFailsWhenServerExits(t *testing.T) {
 // 「エージェントを終了したのにプロンプトが返ってこない」は
 // 実際に踏むと厄介なので、ここだけは実プロセスで確かめる。
 
-// script は initialize に応答したあと after を実行するシェルスクリプト。
+// script は server/discover に応答したあと after を実行するシェルスクリプト。
 func script(after string) []string {
-	return []string{"-c", `read -r line; printf '{"jsonrpc":"2.0","id":1,"result":{}}\n'; ` + after}
+	return []string{"-c", `read -r line; printf '{"jsonrpc":"2.0","id":1,"result":{"resultType":"complete","supportedVersions":["` + protocolVersion + `"],"capabilities":{"tools":{}}}}\n'; ` + after}
 }
 
 // 行儀のよいサーバー(stdinが閉じたら終了する)を正しく待って閉じること。
