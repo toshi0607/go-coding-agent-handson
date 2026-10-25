@@ -2,7 +2,7 @@
 
 Zenn本「ミニClaude CodeをGoで実装して学ぶ コーディングエージェントのしくみ」の教材リポジトリです。本は現在準備中で、公開され次第ここにリンクを掲載します。
 
-約3,200行のGoコードで、コーディングエージェントの中核機能をひととおり備えたミニエージェントを実装します。エージェントの正体は「LLM呼び出し → ツール実行 → 結果を返して再呼び出し」のループであり、このリポジトリはそのループを隠さず全部見せることを目的にしています。
+約3,100行のGoコードで、コーディングエージェントの中核機能をひととおり備えたミニエージェントを実装します。エージェントの正体は「LLM呼び出し → ツール実行 → 結果を返して再呼び出し」のループであり、このリポジトリはそのループを隠さず全部見せることを目的にしています。
 
 ## 構成
 
@@ -15,7 +15,7 @@ steps/          穴埋め式の段階実装(本のPart 1に対応。下の「進
 ├── 05-system-prompt/    システムプロンプトとCLAUDE.md
 ├── 06-context/          コンテキスト管理(切り詰め・compaction)
 ├── 07-subagent/         サブエージェント(Task tool)
-├── 08-mcp/              MCPクライアント(stdio transport)
+├── 08-mcp/              MCPクライアント(公式Go SDK、stdio transport)
 ├── 09-commands-skills/  スラッシュコマンドとスキル
 └── 10-streaming-hooks/  ストリーミングとhooks
 final/          完成形のミニコーディングエージェント
@@ -27,7 +27,7 @@ final/          完成形のミニコーディングエージェント
 ├── prompt/       システムプロンプト + CLAUDE.md読み込み
 ├── skill/        スキル(段階的開示によるプロンプトのパッケージ化)
 ├── contextmgr/   トークン管理・compaction・ツール結果の切り詰め
-├── mcp/          MCPクライアント(stdio transport)
+├── mcp/          MCPクライアント(公式Go SDK、stdio transport)
 ├── command/      スラッシュコマンド
 ├── hooks/        PreToolUse / PostToolUse フック
 └── config/       設定ファイルの読み込み
@@ -102,7 +102,7 @@ export ANTHROPIC_MODEL=claude-sonnet-5-5
 
 書き方は `example/` の実物を参照してください。
 
-MCPクライアントが話すのは 2026-07-28 版(ステートレス方式)だけです。それより前の、`initialize` ハンドシェイクを前提とするサーバーを `.mcp.json` に書くと、そのサーバーには接続せず、理由を示す警告を出して起動を続けます。
+MCPクライアントには公式Go SDK([modelcontextprotocol/go-sdk](https://github.com/modelcontextprotocol/go-sdk))を使っています。まず 2026-07-28 版(ステートレス方式)の `server/discover` で問い合わせ、それに対応していない古いサーバーには `initialize` ハンドシェイクで接続します。接続できないサーバーは、理由を示す警告を出して飛ばし、起動を続けます。環境変数 `AGENT_MCP_LOG=1` を付けて起動すると、MCPサーバーと送受信したJSON-RPCのメッセージが標準エラー出力に出ます。
 
 ### 設定ファイルは実行権限そのもの
 

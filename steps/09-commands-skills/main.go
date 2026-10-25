@@ -300,6 +300,14 @@ func confirmTrust(workDir string, executables []config.Executable, ask permissio
 // ツール一覧を集める。1つのサーバーへの接続失敗は警告に留め、
 // エージェント全体は起動させる。
 func connectMCPServers(ctx context.Context, cfg config.MCPConfig) ([]tools.Tool, func()) {
+	// AGENT_MCP_LOG を設定すると、MCPサーバーと送受信したJSON-RPCの
+	// メッセージを標準エラー出力に書き出す。SDK に任せたやりとりを
+	// 目で確かめるためのもの。
+	var mcpLog io.Writer
+	if os.Getenv("AGENT_MCP_LOG") != "" {
+		mcpLog = os.Stderr
+	}
+
 	var allTools []tools.Tool
 	var clients []*mcp.Client
 	for _, name := range slices.Sorted(maps.Keys(cfg.MCPServers)) {
@@ -311,6 +319,7 @@ func connectMCPServers(ctx context.Context, cfg config.MCPConfig) ([]tools.Tool,
 			// サーバーのログは捨てずに標準エラー出力へ流す。
 			// MCPサーバーが動かないときの手がかりはここにしかない。
 			Stderr: os.Stderr,
+			Log:    mcpLog,
 		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "警告: %v\n", err)
@@ -318,7 +327,7 @@ func connectMCPServers(ctx context.Context, cfg config.MCPConfig) ([]tools.Tool,
 		}
 		serverTools, err := client.Tools(ctx)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "警告: MCPサーバー %s のツール取得に失敗: %v\n", name, err)
+			fmt.Fprintf(os.Stderr, "警告: %v\n", err)
 			_ = client.Close()
 			continue
 		}
