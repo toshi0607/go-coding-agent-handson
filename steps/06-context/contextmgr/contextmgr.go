@@ -116,11 +116,11 @@ const summaryMaxTokens = 8192
 // 一度失った詳細は戻らない。
 //
 // base には通常のターンと同じリクエスト(agent.buildParams() の結果)を
-// そのまま渡す。要約だからといって Messages 以外を省いてはいけない:
-// 圧縮対象の履歴には tool_use / tool_result ブロックが含まれており、
-// tools を伴わないリクエストでそれらを送るとAPIに拒否される。
-// 「要約用の軽いリクエスト」を別途組み立てたくなるが、履歴の中身と
-// リクエストのパラメータには対応関係があり、勝手に外せない。
+// そのまま渡し、出力の上限とメッセージだけを差し替える。
+// tools を外しても、今のMessages APIは tool_use / tool_result を含む
+// 履歴を受け付ける(2026年10月に確認)。それでも同じ形で送るのは、
+// 要約用のリクエストを別に組み立てずに済み、履歴に出てくるツールの
+// 定義もモデルに見えたままになるからである。
 func (m *Manager) Compact(ctx context.Context, client llm.Client, base anthropic.MessageNewParams) ([]anthropic.MessageParam, error) {
 	params := base
 	params.MaxTokens = summaryMaxTokens
