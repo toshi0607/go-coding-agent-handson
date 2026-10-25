@@ -103,7 +103,12 @@ func connect(ctx context.Context, serverName string, t sdk.Transport) (*Client, 
 	client := sdk.NewClient(&sdk.Implementation{
 		Name:    "go-coding-agent-handson",
 		Version: "0.1.0",
-	}, nil)
+	}, &sdk.ClientOptions{
+		// サーバーからの問い合わせ(ユーザーへの質問など)には何も答えない
+		// ので、capabilities は空で宣言する。指定しないと SDK は既定で
+		// roots(2026-07-28 版で非推奨)を宣言する。
+		Capabilities: &sdk.ClientCapabilities{},
+	})
 	session, err := client.Connect(ctx, t, nil)
 	if err != nil {
 		return nil, err

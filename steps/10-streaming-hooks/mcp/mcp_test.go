@@ -261,6 +261,10 @@ func TestConnectToSubprocess(t *testing.T) {
 			t.Errorf("Log に %s がありません:\n%s", method, log.String())
 		}
 	}
+	// サーバーからの問い合わせには答えないので、capabilities は空で宣言する。
+	if !strings.Contains(log.String(), `"io.modelcontextprotocol/clientCapabilities":{}`) {
+		t.Errorf("capabilities が空で宣言されていません:\n%s", log.String())
+	}
 }
 
 // discoverReply は server/discover にだけ応答するシェルスクリプトの断片。
