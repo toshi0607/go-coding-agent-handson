@@ -16,7 +16,7 @@ MCP(Model Context Protocol)は、ツールを**外部プロセス(MCPサーバ�
 
 ## 前のstepから引き継いだもの
 
-step 07の解答(Task tool)は埋まった状態で始まります。今回増えたのは:
+step 07の解答(`task` ツール)は埋まった状態で始まります。今回増えたのは:
 
 - [mcp/client.go](mcp/client.go) — サーバーの起動と接続、終了(実装済み)
 - [mcp/tool.go](mcp/tool.go) — MCPのツールを `tools.Tool` にラップするアダプタ(課題)

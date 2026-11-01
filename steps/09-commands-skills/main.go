@@ -92,7 +92,7 @@ func run(oneShot string) error {
 	}
 
 	// --- ツールの組み立て ---
-	// 組み込みツール + スキル + MCPツール + Taskツール(サブエージェント)。
+	// 組み込みツール + スキル + MCPツール + taskツール(サブエージェント)。
 	baseTools := []tools.Tool{
 		tools.NewReadFile(ws),
 		tools.NewListFiles(ws),
@@ -164,7 +164,7 @@ func run(oneShot string) error {
 
 	// --- サブエージェントの組み立て ---
 	// 親と同じツールを持つが、
-	//   - Taskツールは持たない(再帰の禁止)
+	//   - taskツールは持たない(入れ子を1階層に限る)
 	//   - 出力は捨てる(親の表示を汚さない)
 	//   - 承認の質問に出所を付ける
 	// という3点だけが違う。

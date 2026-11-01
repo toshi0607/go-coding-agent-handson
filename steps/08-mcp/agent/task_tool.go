@@ -25,15 +25,15 @@ import (
 // promptには「サブエージェントが単独で作業を完遂できるだけの情報」を
 // すべて書き込む必要がある。LLMへのツール説明でそれを要求している。
 type TaskTool struct {
-	// newSubAgent はサブエージェントを生成するファクトリ。
+	// newSubAgent はサブエージェントを作る関数。task ツールが呼ばれる
+	// たびに呼び、会話履歴が空の Agent を作る。
 	// どんなツール・権限を持たせるかは呼び出し側(main)が決める。
 	newSubAgent func() *Agent
 }
 
 // NewTaskTool は TaskTool を作る。
 // newSubAgent が返すエージェントには TaskTool 自身を含めないこと。
-// 含めるとサブエージェントがさらにサブエージェントを起動でき、
-// 制御不能な再帰(fork爆弾のようなもの)につながる。
+// 含めると入れ子にできるが、この実装は入れ子の深さを数えないので含めない。
 func NewTaskTool(newSubAgent func() *Agent) *TaskTool {
 	return &TaskTool{newSubAgent: newSubAgent}
 }
