@@ -81,15 +81,15 @@ func (r *Runner) RunPre(ctx context.Context, toolName string, input json.RawMess
 		// 正しく、「壊れたら通す」(fail-open)は最悪の設計である。
 		switch {
 		case err != nil:
-			return fmt.Errorf("PreToolUseフックを実行できなかったため、安全側に倒して中止しました: %w", err)
+			return fmt.Errorf("PreToolUseフックを実行できなかったため、ツールを実行しませんでした: %w", err)
 		case exitCode == 0:
 			// 許可。次のフックへ。
 		case exitCode == blockExitCode:
 			// stderrの内容をエラーとして返す = LLMに理由が伝わり、
 			// LLMは別の方法を試せる。
-			return fmt.Errorf("フックがツール実行をブロックしました: %s", bytes.TrimSpace(stderr))
+			return fmt.Errorf("PreToolUseフックがツールの実行をブロックしました: %s", bytes.TrimSpace(stderr))
 		default:
-			return fmt.Errorf("PreToolUseフックが予期しない終了コード %d を返しました(契約は 0=許可 / 2=ブロック)。判定できないため安全側に倒して中止しました: %s",
+			return fmt.Errorf("PreToolUseフックが予期しない終了コード %d を返しました(0は許可、2はブロック)。判定できないため、ツールを実行しませんでした: %s",
 				exitCode, bytes.TrimSpace(stderr))
 		}
 	}
