@@ -98,7 +98,7 @@ export ANTHROPIC_MODEL=claude-sonnet-5-5
 | `.agent/settings.json` | bashコマンドのallowlistとhooks定義 |
 | `.agent/commands/<名前>.md` | カスタムスラッシュコマンド(`$ARGUMENTS`が引数に展開される) |
 | `.agent/skills/<名前>/SKILL.md` | スキル。名前と説明だけがプロンプトに載り、本文はLLMが必要と判断したときに読む |
-| `.mcp.json` | 接続するMCPサーバーの定義 |
+| `.mcp.json` | 接続するMCPサーバーの定義(例は `weather-server/` を `go run` で起動する) |
 
 書き方は `example/` の実物を参照してください。
 

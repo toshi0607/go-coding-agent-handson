@@ -61,12 +61,14 @@ make check STEP=08
 ```bash
 export ANTHROPIC_API_KEY=sk-ant-...
 cd example
-go run ../steps/08-mcp
+AGENT_MCP_LOG=1 go run ../steps/08-mcp
 ```
 
-起動すると、設定ファイルのサーバーを起動してよいかの確認が表示されます。`example/.mcp.json` のサーバー定義は空ですが、`.agent/settings.json` の allowlist が「承認なしで実行を許可」の宣言として一覧に載るためです。`n` と答えると起動が中止されることも確かめてください。
+`example/.mcp.json` には、例のMCPサーバー `weather`([example/weather-server](../../example/weather-server/main.go))が `go run ./weather-server` で起動するように書いてあります。`get_weather` ツールを1つだけ持ち、引数の `city` を受け取って「晴れ (Tokyo)」のような固定の結果を返すサーバーです。
 
-手元にMCPサーバーがあれば(npxで動く公開サーバーでも、SDK で書いた数十行のサーバーでも)、`.mcp.json` に `{"mcpServers": {"名前": {"command": "...", "args": [...]}}}` と書くだけで、そのツールがエージェントに加わります。確認の一覧にそのコマンドが出ることと、`AGENT_MCP_LOG=1` でやりとりのJSONが見えることも確かめてください。
+起動すると、設定ファイルのシェルコマンドを実行してよいかの確認が表示されます。一覧に `go run ./weather-server` と、`.agent/settings.json` の allowlist が出ることを確かめて `y` を入力します。`n` と答えると起動が中止されることも確かめてください。続けて「東京の天気を教えて」と頼み、`mcp__weather__get_weather` の実行を許可すると、標準エラー出力にMCPサーバーとやりとりしたJSONが表示されます。
+
+ほかのMCPサーバー(npxで動く公開サーバーなど)も、`.mcp.json` の `mcpServers` に `"名前": {"command": "...", "args": [...]}` を足すだけで、そのツールがエージェントに加わります。
 
 ## 次のstepへ
 
