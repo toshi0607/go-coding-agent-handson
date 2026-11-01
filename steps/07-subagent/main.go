@@ -1,8 +1,8 @@
 // go-coding-agent-handson のミニコーディングエージェント(step 07 時点)。
 //
-// ここ(main)の仕事は「組み立て」である。各パッケージが提供する部品
-// (LLMクライアント、ツール、権限、コンテキスト管理)を配線して
-// エージェントを作り、REPLに渡す。どの部品に何を渡しているかを追うと、
+// ここ(main)の仕事は「組み立て」である。各パッケージが提供するパーツ
+// (LLMクライアント、ツール、権限、コンテキスト管理)をつなぎ合わせて
+// エージェントを作り、REPLに渡す。どのパーツに何を渡しているかを追うと、
 // エージェント全体の構造が見える。
 //
 // 使い方:
@@ -62,9 +62,9 @@ func run(oneShot string) error {
 	stdin := bufio.NewReader(os.Stdin)
 	asker := makeAsker(stdin, "[y]es / [n]o / [a]lways")
 
-	// --- ファイル操作の封じ込め ---
+	// --- ファイル操作の範囲を作業ディレクトリに限定する ---
 	// ファイル系ツールはこの Workspace 経由でしかパスを解決できない。
-	// LLMが渡してきたパスを直接OSに投げないための境界である。
+	// LLMが渡してきたパスを直接OSに渡さないためのしくみである。
 	ws, err := tools.NewWorkspace(workDir)
 	if err != nil {
 		return err
@@ -86,8 +86,8 @@ func run(oneShot string) error {
 		return permission.New(permission.Config{
 			ToolPolicies: map[string]permission.Policy{
 				// read_file と list_files を無条件許可にできるのは、
-				// Workspace で作業ディレクトリに封じ込めてあるからである。
-				// 封じ込めがなければ「読み取りだから安全」は成り立たない
+				// Workspace で作業ディレクトリの中に限定してあるからである。
+				// 作業ディレクトリへの限定がなければ「読み取りだから安全」は成り立たない
 				// (~/.ssh/id_rsa も .env も読めてしまう)。
 				"read_file":  permission.Allow,
 				"list_files": permission.Allow,
@@ -102,13 +102,13 @@ func run(oneShot string) error {
 	checker := newChecker(asker)
 
 	// サブエージェント用には別の Checker を作る。ポリシーは同じだが、
-	// 質問の出所を明示する点だけが違う。サブエージェントの出力は
+	// 質問の出所を明示する点だけが異なる。サブエージェントの出力は
 	// 画面に出していない(下の Out: io.Discard)ので、承認だけが
 	// 文脈なしに現れると、ユーザーは何に答えているのか分からない。
 	//
 	// 「人に聞けないから自動で拒否する」という選択肢もあるが、それだと
 	// サブエージェントは調査しかできなくなる。誰が要求しているかを
-	// 伝えたうえで人間に判断させる方を採った。
+	// 伝えたうえでユーザーに判断させる方を採った。
 	subChecker := newChecker(func(question string) (string, error) {
 		return asker("(サブエージェントからの要求) " + question)
 	})
@@ -125,7 +125,7 @@ func run(oneShot string) error {
 	//   - taskツールは持たない(入れ子を1階層に限る)
 	//   - 出力は捨てる(親の表示を汚さない)
 	//   - 承認の質問に出所を付ける
-	// という3点だけが違う。
+	// という3点だけが異なる。
 	taskTool := agent.NewTaskTool(func() *agent.Agent {
 		return agent.New(agent.Config{
 			Client:       client,

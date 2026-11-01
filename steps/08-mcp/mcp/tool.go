@@ -31,7 +31,7 @@ func (c *Client) Tools(ctx context.Context) ([]tools.Tool, error) {
 	//  - callTimeout の期限付き context を作って使う(レスポンスを返さないMCPサーバーで
 	//    起動が止まらないように)
 	//  - c.session.Tools(ctx, nil) で一覧を取る。これは tools/list を呼び、
-	//    (*sdk.Tool, error) を1件ずつ返すイテレータなので、for range で回す。
+	//    (*sdk.Tool, error) を1件ずつ返すイテレーターなので、for range で回す。
 	//    err が入っていたら、どのサーバーの一覧が取れなかったか分かる
 	//    エラーを返す
 	//  - 各ツールの InputSchema は toSchema(実装済み)で tools.Schema に写す

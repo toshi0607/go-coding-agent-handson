@@ -19,7 +19,7 @@ type ListFiles struct {
 	ws *Workspace
 }
 
-// NewListFiles は作業ディレクトリに封じ込められた list_files を作る。
+// NewListFiles は作業ディレクトリの中に限定された list_files を作る。
 func NewListFiles(ws *Workspace) *ListFiles { return &ListFiles{ws: ws} }
 
 func (*ListFiles) Name() string { return "list_files" }

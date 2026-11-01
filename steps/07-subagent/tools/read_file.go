@@ -19,7 +19,7 @@ type ReadFile struct {
 	ws *Workspace
 }
 
-// NewReadFile は作業ディレクトリに封じ込められた read_file を作る。
+// NewReadFile は作業ディレクトリの中に限定された read_file を作る。
 func NewReadFile(ws *Workspace) *ReadFile { return &ReadFile{ws: ws} }
 
 func (*ReadFile) Name() string { return "read_file" }

@@ -2,11 +2,11 @@
 //
 // エージェントの正体は次のループである:
 //
-//	ユーザー入力 → LLM呼び出し → (ツール実行 → 結果を返してLLM再呼び出し)* → 応答
+//	ユーザー入力 → LLM呼び出し → (ツール実行 → 結果を返してLLM再呼び出し)* → レスポンス
 //
 // LLMは「次にどのツールを使うか」を決めるだけで、実際に手を動かす
 // (ファイルを読む、コマンドを実行する)のはこちら側のコードである。
-// この役割分担と、その間を往復するメッセージの積み方さえ理解すれば、
+// この役割分担と、その間を往復するメッセージの足し方さえ理解すれば、
 // コーディングエージェントの骨格は理解できたことになる。
 package agent
 
@@ -25,8 +25,8 @@ import (
 
 const (
 	// maxTokensPerTurn は1回のLLM呼び出しの出力上限。
-	// 既定のモデルは常に思考(thinking)し、その分もこの上限に数えられるので、
-	// 見える応答の長さだけで決めると足りなくなる。一方、ストリーミングしない
+	// デフォルトのモデルは常に思考(thinking)し、その分もこの上限に数えられるので、
+	// 見えるレスポンスの長さだけで決めると足りなくなる。一方、ストリーミングしない
 	// 呼び出しでもHTTPタイムアウトに収まるよう、大きくしすぎてもいない。
 	maxTokensPerTurn = 16000
 
@@ -116,7 +116,7 @@ func New(cfg Config) *Agent {
 }
 
 // Run は1ユーザーターンを処理する。ツール実行を挟みながらLLMとの
-// 往復を繰り返し、最終的なテキスト応答を返す。
+// 往復を繰り返し、最終的なテキストのレスポンスを返す。
 func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 	// compactionはターンの開始時、つまり会話が一区切りついた地点で行う。
 	// ツールループの途中で履歴を要約すると、tool_use と tool_result の
@@ -131,7 +131,7 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 	a.history = append(a.history, anthropic.NewUserMessage(anthropic.NewTextBlock(userInput)))
 
 	// エージェントループ本体。
-	// 「LLMがツールを使い終わって、テキストだけの応答を返してくるまで」
+	// 「LLMがツールを使い終わって、テキストだけのレスポンスを返してくるまで」
 	// が1ユーザーターン。
 	for range a.maxIterations {
 		resp, err := a.client.Complete(ctx, a.buildParams())
@@ -140,7 +140,7 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 		}
 		fmt.Fprintln(a.out, textOf(resp))
 
-		// アシスタントの応答は tool_use ブロックも含めて丸ごと履歴に積む。
+		// アシスタントのレスポンスは tool_use ブロックも含めて丸ごと履歴に足す。
 		// tool_use を欠いた履歴に tool_result だけ足すとAPIに拒否される。
 		a.history = append(a.history, resp.ToParam())
 		a.lastUsageTokens = int(resp.Usage.InputTokens + resp.Usage.OutputTokens)
@@ -151,8 +151,8 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 		// これは罠がある。stop_reason は tool_use / end_turn の2値ではなく、
 		// max_tokens(出力上限で打ち切られた)や refusal(安全上の拒否)も
 		// あり、しかも max_tokens では tool_use ブロックが生成途中で
-		// 切れていることがある。その応答をそのまま「ターン終了」として
-		// 履歴に残すと、tool_use に対応する tool_result が永久に積まれず、
+		// 切れていることがある。そのレスポンスをそのまま「ターン終了」として
+		// 履歴に残すと、tool_use に対応する tool_result が永久に足されず、
 		// 以降のリクエストがすべてAPIに拒否される——会話が死ぬ。
 		//
 		// そのため判定は「stop_reason」ではなく「未処理のtool_useが
@@ -160,7 +160,7 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 		toolUses := toolUseBlocks(resp)
 
 		if resp.StopReason != anthropic.StopReasonToolUse {
-			// ターンは終わり。ただし中断された応答に tool_use が
+			// ターンは終わり。ただし中断されたレスポンスに tool_use が
 			// 残っている場合は、打ち切りを伝える tool_result で
 			// 必ず対応を閉じてから返す(履歴の整合性を保つ)。
 			if len(toolUses) > 0 {
@@ -178,14 +178,14 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 		}
 
 		// stop_reason が tool_use なのに tool_use ブロックが無い、という
-		// 矛盾した応答もありうる。空の user メッセージを送るとAPIエラーに
+		// 矛盾したレスポンスもありうる。空の user メッセージを送るとAPIエラーに
 		// なるので、ここで打ち切る。
 		if len(toolUses) == 0 {
 			return textOf(resp), nil
 		}
 
 		// ツールを実行し、結果を1つのuserメッセージにまとめて返す。
-		// LLMは1回の応答で複数のツールを呼ぶことがあり(並列ツール呼び出し)、
+		// LLMは1回のレスポンスで複数のツールを呼ぶことがあり(並列ツール呼び出し)、
 		// その場合もtool_resultは全部まとめて1メッセージで返すのが作法。
 		var results []anthropic.ContentBlockParamUnion
 		for _, block := range toolUses {

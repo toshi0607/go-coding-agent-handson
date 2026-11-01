@@ -14,7 +14,7 @@
 // 突き合わせ、プロトコルのバージョンの交渉は SDK の仕事である。
 // このパッケージが自分で書くのは次の2つ:
 //   - MCPのツールを tools.Tool として扱えるようにするアダプタ(tool.go)
-//   - 外部プロセスに対する最低限の備え(応答待ちの上限、終了しない
+//   - 外部プロセスに対する最低限の備え(レスポンス待ちの上限、終了しない
 //     サーバーの強制終了、標準エラー出力の転送)
 package mcp
 
@@ -31,9 +31,9 @@ import (
 )
 
 // callTimeout は1回のリクエスト(接続時の問い合わせ、ツール一覧の取得、
-// ツールの実行)の応答待ち上限。
+// ツールの実行)のレスポンス待ち上限。
 //
-// これがないと、応答を返さないサーバー1つでエージェント全体が固まる。
+// これがないと、レスポンスを返さないサーバー1つでエージェント全体が固まる。
 // ユーザーから見ると「Enterを押したらプロンプトが返ってこない」という
 // 壊れ方になる。テストで短くできるよう、定数ではなく変数にしている。
 var callTimeout = 30 * time.Second
@@ -96,7 +96,7 @@ func Connect(ctx context.Context, s Server) (*Client, error) {
 // テストでは子プロセスの代わりに SDK の InMemoryTransport を渡す。
 func connect(ctx context.Context, serverName string, t sdk.Transport) (*Client, error) {
 	// 接続時の問い合わせ(server/discover)にも上限を置く。
-	// 応答しないサーバーが1つあるだけで起動が止まらないようにするため。
+	// レスポンスを返さないサーバーが1つあるだけで起動が止まらないようにするため。
 	ctx, cancel := context.WithTimeout(ctx, callTimeout)
 	defer cancel()
 
@@ -105,7 +105,7 @@ func connect(ctx context.Context, serverName string, t sdk.Transport) (*Client, 
 		Version: "0.1.0",
 	}, &sdk.ClientOptions{
 		// サーバーからの問い合わせ(ユーザーへの質問など)には何も答えない
-		// ので、capabilities は空で宣言する。指定しないと SDK は既定で
+		// ので、capabilities は空で宣言する。指定しないと SDK はデフォルトで
 		// roots(2026-07-28 版で非推奨)を宣言する。
 		Capabilities: &sdk.ClientCapabilities{},
 	})

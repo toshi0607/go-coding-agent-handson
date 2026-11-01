@@ -66,7 +66,7 @@ func connectInMemory(t *testing.T) *Client {
 	return c
 }
 
-// shortenCallTimeout はテストの間だけ応答待ちの上限を短くする。
+// shortenCallTimeout はテストの間だけレスポンス待ちの上限を短くする。
 func shortenCallTimeout(t *testing.T, d time.Duration) {
 	t.Helper()
 	old := callTimeout
@@ -144,7 +144,7 @@ func TestRunReturnsToolError(t *testing.T) {
 	}
 }
 
-// 応答しないツールを待ち続けず、上限で諦めること。
+// レスポンスを返さないツールを待ち続けず、上限で諦めること。
 // 諦めた呼び出しの結果が後から届いても、次の呼び出しが正しい結果を受け取ること
 // (id の突き合わせは SDK の仕事だが、ずれていないことはここで確かめる)。
 func TestRunTimesOutOnSlowTool(t *testing.T) {
@@ -155,13 +155,13 @@ func TestRunTimesOutOnSlowTool(t *testing.T) {
 	start := time.Now()
 	_, err := slow.Run(t.Context(), []byte(`{}`))
 	if err == nil {
-		t.Fatal("応答しないツールでエラーになっていない")
+		t.Fatal("レスポンスを返さないツールでエラーになっていない")
 	}
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Errorf("期限切れと判別できない: %v", err)
 	}
 	if !strings.Contains(err.Error(), "slow") {
-		t.Errorf("どのツールが応答しないか分からない: %v", err)
+		t.Errorf("どのツールがレスポンスを返さないか分からない: %v", err)
 	}
 	if elapsed := time.Since(start); elapsed > 2*time.Second {
 		t.Errorf("上限で諦めていない: %v", elapsed)
@@ -267,10 +267,10 @@ func TestConnectToSubprocess(t *testing.T) {
 	}
 }
 
-// discoverReply は server/discover にだけ応答するシェルスクリプトの断片。
+// discoverReply は server/discover にだけレスポンスを返すシェルスクリプトの断片。
 const discoverReply = `read -r line; printf '{"jsonrpc":"2.0","id":1,"result":{"resultType":"complete","supportedVersions":["2026-07-28"],"capabilities":{"tools":{}}}}\n'; `
 
-// 接続時の問い合わせに応答しないサーバーで、起動が止まらないこと。
+// 接続時の問い合わせにレスポンスを返さないサーバーで、起動が止まらないこと。
 func TestConnectTimesOutOnSilentServer(t *testing.T) {
 	shortenCallTimeout(t, 300*time.Millisecond)
 	start := time.Now()
@@ -282,7 +282,7 @@ func TestConnectTimesOutOnSilentServer(t *testing.T) {
 		Args: []string{"-c", "exec sleep 60"},
 	})
 	if err == nil {
-		t.Fatal("応答しないサーバーに接続できてしまった")
+		t.Fatal("レスポンスを返さないサーバーに接続できてしまった")
 	}
 	if !strings.Contains(err.Error(), "silent") {
 		t.Errorf("どのサーバーか分からない: %v", err)

@@ -2,11 +2,11 @@
 //
 // エージェントの正体は次のループである:
 //
-//	ユーザー入力 → LLM呼び出し → (ツール実行 → 結果を返してLLM再呼び出し)* → 応答
+//	ユーザー入力 → LLM呼び出し → (ツール実行 → 結果を返してLLM再呼び出し)* → レスポンス
 //
 // LLMは「次にどのツールを使うか」を決めるだけで、実際に手を動かす
 // (ファイルを読む、コマンドを実行する)のはこちら側のコードである。
-// この役割分担と、その間を往復するメッセージの積み方さえ理解すれば、
+// この役割分担と、その間を往復するメッセージの足し方さえ理解すれば、
 // コーディングエージェントの骨格は理解できたことになる。
 package agent
 
@@ -23,8 +23,8 @@ import (
 
 const (
 	// maxTokensPerTurn は1回のLLM呼び出しの出力上限。
-	// 既定のモデルは常に思考(thinking)し、その分もこの上限に数えられるので、
-	// 見える応答の長さだけで決めると足りなくなる。一方、ストリーミングしない
+	// デフォルトのモデルは常に思考(thinking)し、その分もこの上限に数えられるので、
+	// 見えるレスポンスの長さだけで決めると足りなくなる。一方、ストリーミングしない
 	// 呼び出しでもHTTPタイムアウトに収まるよう、大きくしすぎてもいない。
 	maxTokensPerTurn = 16000
 
@@ -44,7 +44,7 @@ type Config struct {
 	Model  anthropic.Model
 	// Tools はこのエージェントが使えるツール。
 	Tools []tools.Tool
-	// Out は途中経過(応答テキスト、ツール実行表示)の出力先。
+	// Out は途中経過(レスポンスのテキスト、ツール実行表示)の出力先。
 	Out io.Writer
 	// MaxIterations は1ターン内のLLM往復上限(0ならデフォルト)。
 	MaxIterations int
@@ -90,12 +90,12 @@ func New(cfg Config) *Agent {
 }
 
 // Run は1ユーザーターンを処理する。ツール実行を挟みながらLLMとの
-// 往復を繰り返し、最終的なテキスト応答を返す。
+// 往復を繰り返し、最終的なテキストのレスポンスを返す。
 func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 	a.history = append(a.history, anthropic.NewUserMessage(anthropic.NewTextBlock(userInput)))
 
 	// エージェントループ本体。
-	// 「LLMがツールを使い終わって、テキストだけの応答を返してくるまで」
+	// 「LLMがツールを使い終わって、テキストだけのレスポンスを返してくるまで」
 	// が1ユーザーターン。
 	for range a.maxIterations {
 		resp, err := a.client.Complete(ctx, a.buildParams())
@@ -104,7 +104,7 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 		}
 		fmt.Fprintln(a.out, textOf(resp))
 
-		// アシスタントの応答は tool_use ブロックも含めて丸ごと履歴に積む。
+		// アシスタントのレスポンスは tool_use ブロックも含めて丸ごと履歴に足す。
 		// tool_use を欠いた履歴に tool_result だけ足すとAPIに拒否される。
 		a.history = append(a.history, resp.ToParam())
 

@@ -1,13 +1,13 @@
 // Package contextmgr はコンテキストウィンドウの管理を担う。
 //
 // LLMのコンテキストウィンドウは有限で、会話履歴・ツール結果は
-// すべてそこに積まれていく。放っておくと:
+// すべてそこに足されていく。放っておくと:
 //  1. 上限超過でAPIエラーになる
 //  2. 上限に達しなくても、入力トークン分の課金が毎ターン膨らむ
-//  3. 長すぎるコンテキストは応答品質も下げる
+//  3. 長すぎるコンテキストはレスポンスの品質も下げる
 //
 // 対策は「入れる量を減らす」(ツール結果の切り詰め)と
-// 「積んだものを圧縮する」(compaction = 履歴の要約)の2本柱。
+// 「足したものを圧縮する」(compaction = 履歴の要約)の2本柱。
 package contextmgr
 
 import (
@@ -88,7 +88,7 @@ func truncateRunes(s string, max int) (head string, total int) {
 // ShouldCompact は直近のAPIレスポンスのトークン使用量から、
 // compactionすべきかを判定する。
 //
-// トークン数を自前で数えるのは難しい(トークナイザはモデル依存)ので、
+// トークン数を自前で数えるのは難しい(トークナイザーはモデル依存)ので、
 // APIレスポンスの usage(実測値)を使う。これが最も正確で、かつタダである。
 func (m *Manager) ShouldCompact(lastUsageTokens int) bool {
 	return lastUsageTokens > m.CompactThreshold
@@ -100,7 +100,7 @@ const summaryPrompt = `これまでの会話を、この続きから作業を再
 - 未完了のタスクと次にやるべきこと
 要約以外の文章(前置きなど)は不要です。`
 
-// summaryMaxTokens は要約1回分の出力上限。既定のモデルでは思考の分もここに数えられる。
+// summaryMaxTokens は要約1回分の出力上限。デフォルトのモデルでは思考の分もここに数えられる。
 const summaryMaxTokens = 8192
 
 // Compact は会話履歴を要約して置き換える。
@@ -122,7 +122,7 @@ const summaryMaxTokens = 8192
 // 圧縮対象の履歴には tool_use / tool_result ブロックが含まれており、
 // tools を伴わないリクエストでそれらを送るとAPIに拒否される。
 // 「要約用の軽いリクエスト」を別途組み立てたくなるが、履歴の中身と
-// リクエストのパラメータには対応関係があり、勝手に外せない。
+// リクエストのパラメーターには対応関係があり、勝手に外せない。
 func (m *Manager) Compact(ctx context.Context, client llm.Client, base anthropic.MessageNewParams) ([]anthropic.MessageParam, error) {
 	params := base
 	params.MaxTokens = summaryMaxTokens

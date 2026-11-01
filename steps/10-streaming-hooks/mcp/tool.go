@@ -29,7 +29,7 @@ func (c *Client) Tools(ctx context.Context) ([]tools.Tool, error) {
 	defer cancel()
 
 	// session.Tools は tools/list を呼び、一覧がページに分かれていれば
-	// 続きも取りながら1件ずつ返すイテレータ。
+	// 続きも取りながら1件ずつ返すイテレーター。
 	var result []tools.Tool
 	for info, err := range c.session.Tools(ctx, nil) {
 		if err != nil {
@@ -86,7 +86,7 @@ func (t *Tool) InputSchema() tools.Schema {
 
 // Run は tools/call でサーバーのツールを実行し、テキストの結果を返す。
 func (t *Tool) Run(ctx context.Context, input json.RawMessage) (string, error) {
-	// 応答待ちに上限を置く。ツール実行の ctx を親にするので、
+	// レスポンス待ちに上限を置く。ツール実行の ctx を親にするので、
 	// Ctrl-C によるキャンセルもサーバーへの問い合わせまで届く。
 	// 期限が来るかキャンセルされると、SDK はサーバーに
 	// notifications/cancelled を送り、待つのをやめて ctx.Err() を返す。

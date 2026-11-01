@@ -145,7 +145,7 @@ func TestExecuteRejectsSymlinkEscape(t *testing.T) {
 	})
 
 	// 内側を指すリンクは正当なので通ること。
-	// 封じ込めが厳しすぎて普通の使い方ができないのも困る。
+	// 作業ディレクトリへの限定が厳しすぎて普通の使い方ができないのも困る。
 	t.Run("内側を指すリンクは許可", func(t *testing.T) {
 		dir := t.TempDir()
 		real := filepath.Join(dir, "shared-prompt.md")

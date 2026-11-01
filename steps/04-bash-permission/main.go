@@ -1,8 +1,8 @@
 // go-coding-agent-handson のミニコーディングエージェント(step 04 時点)。
 //
-// ここ(main)の仕事は「組み立て」である。各パッケージが提供する部品
-// (LLMクライアント、ツール、権限、コンテキスト管理)を配線して
-// エージェントを作り、REPLに渡す。どの部品に何を渡しているかを追うと、
+// ここ(main)の仕事は「組み立て」である。各パッケージが提供するパーツ
+// (LLMクライアント、ツール、権限、コンテキスト管理)をつなぎ合わせて
+// エージェントを作り、REPLに渡す。どのパーツに何を渡しているかを追うと、
 // エージェント全体の構造が見える。
 //
 // 使い方:
@@ -60,9 +60,9 @@ func run(oneShot string) error {
 	stdin := bufio.NewReader(os.Stdin)
 	asker := makeAsker(stdin, "[y]es / [n]o / [a]lways")
 
-	// --- ファイル操作の封じ込め ---
+	// --- ファイル操作の範囲を作業ディレクトリに限定する ---
 	// ファイル系ツールはこの Workspace 経由でしかパスを解決できない。
-	// LLMが渡してきたパスを直接OSに投げないための境界である。
+	// LLMが渡してきたパスを直接OSに渡さないためのしくみである。
 	ws, err := tools.NewWorkspace(workDir)
 	if err != nil {
 		return err
@@ -70,7 +70,7 @@ func run(oneShot string) error {
 	// 以降は解決済みの絶対パス(ws.Root())を使う。os.Getwd() の値を
 	// そのまま使い回すと、macOSで /tmp が /private/tmp のリンクである
 	// ために「システムプロンプトに書かれた作業ディレクトリ」と
-	// 「実際の封じ込め境界」が食い違う。
+	// 「実際の作業ディレクトリの範囲」が食い違う。
 	workDir = ws.Root()
 
 	// --- ツールの組み立て ---
@@ -87,8 +87,8 @@ func run(oneShot string) error {
 	checker := permission.New(permission.Config{
 		ToolPolicies: map[string]permission.Policy{
 			// read_file と list_files を無条件許可にできるのは、
-			// Workspace で作業ディレクトリに封じ込めてあるからである。
-			// 封じ込めがなければ「読み取りだから安全」は成り立たない
+			// Workspace で作業ディレクトリの中に限定してあるからである。
+			// 作業ディレクトリへの限定がなければ「読み取りだから安全」は成り立たない
 			// (~/.ssh/id_rsa も .env も読めてしまう)。
 			"read_file":  permission.Allow,
 			"list_files": permission.Allow,

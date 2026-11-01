@@ -49,7 +49,7 @@ func TestReplayToolUseResponse(t *testing.T) {
 	}
 }
 
-// ToParam(応答→履歴の変換)がリプレイでも本物同様に動くことの確認。
+// ToParam(レスポンス→履歴の変換)がリプレイでも本物同様に動くことの確認。
 // SDKのMessage型は内部にJSONメタデータを持つため、これが動くことは
 // 「ワイヤーフォーマットからUnmarshalする」実装方針の正しさの証明になる。
 func TestReplayMessageRoundTrip(t *testing.T) {

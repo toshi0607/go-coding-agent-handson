@@ -81,7 +81,7 @@ func TestStreamAccumulatesTextAndToolUse(t *testing.T) {
 	}
 
 	// 戻り値は断片ではなく組み立て直された完全なメッセージ。
-	// 履歴に積むのはこちらである。
+	// 履歴に足すのはこちらである。
 	if len(resp.Content) != 2 {
 		t.Fatalf("ブロックは2つのはず: %+v", resp.Content)
 	}
@@ -104,14 +104,14 @@ func TestStreamAccumulatesTextAndToolUse(t *testing.T) {
 		t.Errorf("usageが反映されていない: %+v", resp.Usage)
 	}
 
-	// ToParam() で履歴に積める形になること(ここがSDKの落とし穴で、
+	// ToParam() で履歴に足せる型になること(ここがSDKの落とし穴で、
 	// 内部のJSONメタデータが揃っていないと空になる)。
 	data, err := resp.ToParam().MarshalJSON()
 	if err != nil {
 		t.Fatalf("ToParam: %v", err)
 	}
 	if !strings.Contains(string(data), "read_file") || !strings.Contains(string(data), "ファイルを読みます") {
-		t.Errorf("履歴に積む形に変換できていない: %s", data)
+		t.Errorf("履歴に足せる型に変換できていない: %s", data)
 	}
 }
 
@@ -139,7 +139,7 @@ func TestStreamWithoutCallback(t *testing.T) {
 
 // ストリームの途中で切れた場合にエラーを返すこと。
 // 途中まで組み立てたメッセージを「完成品」として返してしまうと、
-// 壊れた履歴が積まれて以降のリクエストが通らなくなる。
+// 壊れた履歴が足されて以降のリクエストが通らなくなる。
 func TestStreamReportsServerError(t *testing.T) {
 	client := newSSEClient(t, []string{
 		sse("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5-5","content":[],"stop_reason":null,"usage":{"input_tokens":1,"output_tokens":0}}}`),

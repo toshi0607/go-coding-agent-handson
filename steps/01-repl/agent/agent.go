@@ -21,8 +21,8 @@ import (
 )
 
 // maxTokensPerTurn は1回のLLM呼び出しの出力上限。
-// 既定のモデルは常に思考(thinking)し、その分もこの上限に数えられるので、
-// 見える応答の長さだけで決めると足りなくなる。一方、ストリーミングしない
+// デフォルトのモデルは常に思考(thinking)し、その分もこの上限に数えられるので、
+// 見えるレスポンスの長さだけで決めると足りなくなる。一方、ストリーミングしない
 // 呼び出しでもHTTPタイムアウトに収まるよう、大きくしすぎてもいない。
 const maxTokensPerTurn = 16000
 
@@ -30,7 +30,7 @@ const maxTokensPerTurn = 16000
 type Config struct {
 	Client llm.Client
 	Model  anthropic.Model
-	// Out は応答テキストの出力先。
+	// Out はレスポンスのテキストの出力先。
 	Out io.Writer
 }
 
@@ -55,8 +55,8 @@ func New(cfg Config) *Agent {
 	return &Agent{client: cfg.Client, model: cfg.Model, out: out}
 }
 
-// Run は1ユーザーターンを処理する。ユーザー入力を履歴に積んでLLMを呼び、
-// 応答を表示し、応答も履歴に積んで返す。
+// Run は1ユーザーターンを処理する。ユーザー入力を履歴に足してLLMを呼び、
+// レスポンスを表示し、レスポンスも履歴に足して返す。
 func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 	// TODO(step01-1): ユーザー入力を user メッセージとして
 	// 履歴(a.history)の末尾に足す。

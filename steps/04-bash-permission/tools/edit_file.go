@@ -22,7 +22,7 @@ type EditFile struct {
 	ws *Workspace
 }
 
-// NewEditFile は作業ディレクトリに封じ込められた edit_file を作る。
+// NewEditFile は作業ディレクトリの中に限定された edit_file を作る。
 func NewEditFile(ws *Workspace) *EditFile { return &EditFile{ws: ws} }
 
 func (*EditFile) Name() string { return "edit_file" }

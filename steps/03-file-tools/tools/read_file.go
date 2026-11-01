@@ -16,7 +16,7 @@ import (
 //
 // 注意: この素朴な実装は "../../etc/passwd" のようなパスで
 // 作業ディレクトリの外にも手が届いてしまう。何が問題で、
-// どう封じ込めるかは step 04 で扱う。
+// どう作業ディレクトリに限定するかは step 04 で扱う。
 type ReadFile struct {
 	workDir string
 }
