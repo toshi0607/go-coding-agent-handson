@@ -64,12 +64,17 @@ func NewManager() *Manager {
 // 「文字数で切り詰めた」と言いながらバイト数で切るのは、日本語を
 // 扱うツールでは実害のある嘘になる。
 func (m *Manager) TruncateToolResult(result string) string {
+	// 1文字は1バイト以上なので、バイト数が上限以下なら文字数も上限以下。
+	// その場合は文字を数えずにそのまま返す。
+	if len(result) <= m.MaxToolResultChars {
+		return result
+	}
 	head, total := truncateRunes(result, m.MaxToolResultChars)
 	if total <= m.MaxToolResultChars {
 		return result
 	}
 	return head +
-		fmt.Sprintf("\n... (長すぎるため %d 文字で切り詰めました。全体は %d 文字あります。続きが必要なら範囲を絞って取得してください)", m.MaxToolResultChars, total)
+		fmt.Sprintf("\n... (ツール結果が長すぎるため、先頭の %d 文字だけを残して切り詰めました。全体は %d 文字あります。続きが必要なら範囲を絞って取得してください)", m.MaxToolResultChars, total)
 }
 
 // truncateRunes は s の先頭 max 文字と、s 全体の文字数を返す。
