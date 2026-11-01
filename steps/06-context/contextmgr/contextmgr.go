@@ -72,7 +72,7 @@ func (m *Manager) TruncateToolResult(result string) string {
 //
 // Goの文字列はUTF-8のバイト列である。`s[:20000]` と書くと日本語や
 // ソースコード中のマルチバイト文字の途中で切れ、壊れたバイト列が
-// そのままAPIに送られる。「N文字で切り詰めた」と告知しながらバイト数で
+// そのままAPIに送られる。「N文字で切り詰めた」と報告しながらバイト数で
 // 切るのは、日本語を扱うツールでは実害のある嘘になる。
 //
 // []rune(s) に変換すれば文字単位で切れるが、ツール結果は数MBに
@@ -135,7 +135,7 @@ func (m *Manager) Compact(ctx context.Context, client llm.Client, base anthropic
 
 	resp, err := client.Complete(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("compaction用の要約に失敗: %w", err)
+		return nil, fmt.Errorf("compaction用の要約に失敗しました: %w", err)
 	}
 
 	var summary strings.Builder

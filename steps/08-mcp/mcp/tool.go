@@ -28,7 +28,7 @@ func (c *Client) Tools(ctx context.Context) ([]tools.Tool, error) {
 	// TODO(step08-1): サーバーのツール一覧を取得し、1つずつ *Tool に
 	// ラップして返す。満たすべき仕様:
 	//
-	//  - callTimeout の期限付き context を作って使う(応答しないサーバーで
+	//  - callTimeout の期限付き context を作って使う(レスポンスを返さないMCPサーバーで
 	//    起動が止まらないように)
 	//  - c.session.Tools(ctx, nil) で一覧を取る。これは tools/list を呼び、
 	//    (*sdk.Tool, error) を1件ずつ返すイテレータなので、for range で回す。
@@ -81,15 +81,15 @@ func (t *Tool) Run(ctx context.Context, input json.RawMessage) (string, error) {
 	// 満たすべき仕様:
 	//
 	//  - 引数の ctx を親に、callTimeout の期限付き context を作る。
-	//    無期限に待つと、応答しないサーバー1つでエージェント全体が固まる。
+	//    無期限に待つと、レスポンスを返さないMCPサーバー1つでエージェント全体が固まる。
 	//    親が ctx なので、Ctrl-C によるキャンセルも届く
 	//  - t.client.session.CallTool に、サーバー上の名前(t.name)と
 	//    LLMが生成した引数(input)を渡す。
 	//    失敗したら、どのサーバーのどのツールか分かるエラーを返す。
-	//    期限切れを呼び出し側が errors.Is で判別できるよう %w で包む
+	//    期限切れを呼び出し側が errors.Is で判別できるよう %w でラップする
 	//  - 結果の content からテキストを取り出す(textContent は実装済み)
 	//  - res.IsError が立っていたら、そのテキストを含むエラーを返す。
-	//    ツールの失敗はJSON-RPCのエラーではなく、この形で返ってくる
+	//    ツールの失敗はJSON-RPCのエラーではなく、IsError が立った結果として返ってくる
 	panic("TODO(step08-2): steps/08-mcp/mcp/tool.go を実装してください(hints.md 参照)")
 }
 

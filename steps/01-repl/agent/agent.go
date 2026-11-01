@@ -59,7 +59,7 @@ func New(cfg Config) *Agent {
 // 応答を表示し、応答も履歴に積んで返す。
 func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 	// TODO(step01-1): ユーザー入力を user メッセージとして
-	// 履歴(a.history)の末尾に積む。
+	// 履歴(a.history)の末尾に足す。
 	//
 	// リクエストに載せるメッセージの組み立てには、SDKのヘルパー
 	// (anthropic.NewUserMessage / anthropic.NewTextBlock)が使える。
@@ -67,15 +67,15 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 
 	resp, err := a.client.Complete(ctx, a.buildParams())
 	if err != nil {
-		return "", fmt.Errorf("LLM呼び出しに失敗: %w", err)
+		return "", fmt.Errorf("LLMの呼び出しに失敗しました: %w", err)
 	}
 	fmt.Fprintln(a.out, textOf(resp))
 
-	// TODO(step01-2): アシスタントの応答(resp)も履歴に積む。
+	// TODO(step01-2): アシスタントのレスポンス(resp)も履歴に足す。
 	//
 	// これを忘れてもコンパイルは通り、1ターン目は普通に動く。何が
-	// 壊れるかは検証テスト(TestHistoryCarriesAcrossTurns)が教えて
-	// くれる。resp を履歴に積める形に変換する方法は hints.md のヒント2へ。
+	// 壊れるかはテスト(TestHistoryCarriesAcrossTurns)が教えて
+	// くれる。resp を履歴に足せる型に変換する方法は hints.md のヒント2へ。
 
 	return textOf(resp), nil
 }

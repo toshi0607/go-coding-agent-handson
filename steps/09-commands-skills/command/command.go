@@ -96,8 +96,8 @@ func (r *Registry) IsCommand(line string) bool {
 // 存在しません」と言われ、依頼がLLMに届かない。
 //
 // 対策はどちらも同じで、「危険な文字を弾く」のではなく「コマンド名として
-// 安全な文字(英数字と - _)だけを通す」。ファイル操作の封じ込め
-// (tools.Workspace)や bash の isSimpleCommand と同じ考え方である。
+// 安全な文字(英数字と - _)だけを通す」。ファイル操作の範囲を作業ディレクトリに
+// 限定する tools.Workspace や bash の isSimpleCommand と同じ考え方である。
 // 空文字も false にすること。
 //
 // なお、この検証だけでは足りない。コマンドファイル自身がシンボリック

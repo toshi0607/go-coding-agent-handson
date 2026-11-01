@@ -147,7 +147,7 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 			fmt.Fprint(a.out, text)
 		})
 		if err != nil {
-			return "", fmt.Errorf("LLM呼び出しに失敗: %w", err)
+			return "", fmt.Errorf("LLMの呼び出しに失敗しました: %w", err)
 		}
 		fmt.Fprintln(a.out)
 
@@ -178,7 +178,7 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 				var results []anthropic.ContentBlockParamUnion
 				for _, block := range toolUses {
 					results = append(results, anthropic.NewToolResultBlock(block.ID,
-						fmt.Sprintf("応答が %s で中断されたため、このツールは実行されませんでした", resp.StopReason), true))
+						fmt.Sprintf("レスポンスが %s で中断されたため、このツールは実行されませんでした", resp.StopReason), true))
 				}
 				a.history = append(a.history, anthropic.NewUserMessage(results...))
 			}

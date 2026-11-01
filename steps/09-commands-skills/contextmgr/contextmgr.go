@@ -140,7 +140,7 @@ func (m *Manager) Compact(ctx context.Context, client llm.Client, base anthropic
 
 	resp, err := client.Complete(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("compaction用の要約に失敗: %w", err)
+		return nil, fmt.Errorf("compaction用の要約に失敗しました: %w", err)
 	}
 
 	var summary strings.Builder

@@ -42,7 +42,7 @@ func (r *ReadFile) Run(ctx context.Context, input json.RawMessage) (string, erro
 		Path string `json:"path"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("入力のパースに失敗: %w", err)
+		return "", fmt.Errorf("入力のパースに失敗しました: %w", err)
 	}
 	path, err := r.ws.Resolve(in.Path)
 	if err != nil {

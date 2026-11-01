@@ -100,7 +100,7 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 	for range a.maxIterations {
 		resp, err := a.client.Complete(ctx, a.buildParams())
 		if err != nil {
-			return "", fmt.Errorf("LLM呼び出しに失敗: %w", err)
+			return "", fmt.Errorf("LLMの呼び出しに失敗しました: %w", err)
 		}
 		fmt.Fprintln(a.out, textOf(resp))
 
@@ -110,21 +110,21 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 
 		// TODO(step02-2): ここがエージェントループの心臓部である。
 		// 「ループを続けるか終えるか」を判定し、続けるならツールを
-		// 実行して結果を履歴に積む。満たすべき仕様:
+		// 実行して結果を履歴に足す。満たすべき仕様:
 		//
-		//  1. 応答に含まれる tool_use ブロックをすべて実行し
+		//  1. レスポンスに含まれる tool_use ブロックをすべて実行し
 		//     (toolUseBlocks と a.executeTool が使える)、その結果を
-		//     「1つの user メッセージ」にまとめて履歴に積み、ループを続ける。
-		//     LLMは1回の応答で複数のツールを呼ぶことがあり(並列ツール
+		//     「1つの user メッセージ」にまとめて履歴に足し、ループを続ける。
+		//     LLMは1回のレスポンスで複数のツールを呼ぶことがあり(並列ツール
 		//     呼び出し)、その場合も tool_result は全部まとめて
 		//     1メッセージで返すのが作法である
-		//  2. ターンの終わり(ツールを使わない応答)なら textOf(resp) を
+		//  2. ターンの終わり(ツールを使わないレスポンス)なら textOf(resp) を
 		//     返してループを抜ける
 		//  3. 「stop_reason == tool_use かどうか」だけで判定してはいけない。
 		//     README の「ループの終了条件」の節を読み、
-		//     - max_tokens で打ち切られた応答に tool_use が残っているケース
+		//     - max_tokens で打ち切られたレスポンスに tool_use が残っているケース
 		//     - stop_reason が tool_use なのに tool_use ブロックが無いケース
-		//     をどう扱うべきか考えること。検証テストはこの2つを
+		//     をどう扱うべきか考えること。テストはこの2つを
 		//     ピンポイントで突いてくる
 		//
 		// 使える道具: toolUseBlocks(resp) / a.executeTool(ctx, block) /

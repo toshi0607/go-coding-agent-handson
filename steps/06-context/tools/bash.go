@@ -69,7 +69,7 @@ func (b *Bash) Run(ctx context.Context, input json.RawMessage) (string, error) {
 		Command string `json:"command"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("入力のパースに失敗: %w", err)
+		return "", fmt.Errorf("入力のパースに失敗しました: %w", err)
 	}
 	if in.Command == "" {
 		return "", errors.New("command を指定してください")

@@ -44,7 +44,7 @@ func (c *AnthropicClient) Stream(ctx context.Context, params anthropic.MessageNe
 	//    ときだけがテキスト差分である(AsAny() で型を判別できる。
 	//    ツール引数の断片 input_json_delta などは流さない)
 	//  - ループ後に stream.Err() を確認する
-	//  - 蓄積した完全な Message を返す。会話履歴に積むのはこの戻り値で、
+	//  - 蓄積した完全な Message を返す。会話履歴に足すのはこの戻り値で、
 	//    onText はあくまで表示用——という役割分担が肝である
 	panic("TODO(step10-1): steps/10-streaming-hooks/llm/anthropic.go を実装してください(hints.md 参照)")
 }

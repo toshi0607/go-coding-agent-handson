@@ -88,8 +88,8 @@ func (w *Workspace) Resolve(path string) (string, error) {
 	//
 	//  1. 相対パスは作業ディレクトリ(w.root)基準の絶対パスにする
 	//     (filepath.IsAbs / filepath.Join)。絶対パスもここでは弾かず、
-	//     いったん受け入れて最後の封じ込め判定に委ねる——作業ディレクトリ
-	//     「内」を指す絶対パスは正当だからである
+	//     いったん受け入れて、最後の「作業ディレクトリ内か」の判定に
+	//     委ねる——作業ディレクトリ「内」を指す絶対パスは正当だからである
 	//  2. filepath.Clean で正規化する
 	//  3. evalSymlinksLenient(実装済みのヘルパー)でシンボリックリンクを
 	//     解決する。".." の正規化だけではリンク経由の脱出を検出できない。
@@ -105,13 +105,13 @@ func (w *Workspace) Resolve(path string) (string, error) {
 //
 // 真っ先に思いつくのは strings.HasPrefix(path, w.root) だが、これは
 // 不十分である。root が "/home/me/app" のとき "/home/me/app-secrets" が
-// 前方一致で通ってしまう(検証テストがこのケースを突いてくる)。
+// 前方一致で通ってしまう(テストがこのケースを突いてくる)。
 // また root に区切り文字を足して比較する方式は、root が "/" のときに
 // "//" になって内側を全部拒否する。
 //
-// filepath.Rel で root からの相対パスを計算し、その形で判定すると、
+// filepath.Rel で root からの相対パスを計算し、その相対パスで判定すると、
 // 区切り文字の扱いも特殊ケースもまとめて正しく処理できる。
-// 「rel がどんな形なら外側と言えるか」を考えること。
+// 「rel がどんな値なら外側と言えるか」を考えること。
 func (w *Workspace) contains(path string) bool {
 	panic("TODO(step04-4): steps/04-bash-permission/tools/workspace.go を実装してください(hints.md 参照)")
 }

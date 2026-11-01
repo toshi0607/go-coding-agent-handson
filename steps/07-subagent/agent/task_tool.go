@@ -63,7 +63,7 @@ func (t *TaskTool) Run(ctx context.Context, input json.RawMessage) (string, erro
 		Prompt      string `json:"prompt"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("入力のパースに失敗: %w", err)
+		return "", fmt.Errorf("入力のパースに失敗しました: %w", err)
 	}
 	if in.Prompt == "" {
 		return "", fmt.Errorf("prompt を指定してください")
@@ -80,7 +80,7 @@ func (t *TaskTool) Run(ctx context.Context, input json.RawMessage) (string, erro
 	//    残るのはこのテキストだけで、サブエージェントが何十回ツールを
 	//    呼んでいても、その過程は親のコンテキストを消費しない
 	//
-	// 数行で書けるが、検証テストは「親の履歴がサブに漏れていないか」
+	// 数行で書けるが、テストは「親の履歴がサブに漏れていないか」
 	// 「サブの結論だけが親に渡るか」まで見ている。
 	panic("TODO(step07-1): steps/07-subagent/agent/task_tool.go を実装してください(hints.md 参照)")
 }

@@ -310,7 +310,7 @@ func (t *Tool) Run(ctx context.Context, input json.RawMessage) (string, error) {
 		Name string `json:"name"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("入力のパースに失敗: %w", err)
+		return "", fmt.Errorf("入力のパースに失敗しました: %w", err)
 	}
 	s, ok := t.byName[in.Name]
 	if !ok {

@@ -63,7 +63,7 @@ func (t *TaskTool) Run(ctx context.Context, input json.RawMessage) (string, erro
 		Prompt      string `json:"prompt"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("入力のパースに失敗: %w", err)
+		return "", fmt.Errorf("入力のパースに失敗しました: %w", err)
 	}
 	if in.Prompt == "" {
 		return "", fmt.Errorf("prompt を指定してください")
@@ -74,7 +74,7 @@ func (t *TaskTool) Run(ctx context.Context, input json.RawMessage) (string, erro
 	sub := t.newSubAgent()
 	result, err := sub.Run(ctx, in.Prompt)
 	if err != nil {
-		return "", fmt.Errorf("サブエージェントの実行に失敗: %w", err)
+		return "", fmt.Errorf("サブエージェントの実行に失敗しました: %w", err)
 	}
 	// 親に返るのはこの最終テキストだけ。サブエージェントが何十回
 	// ツールを呼んでいても、親の履歴にはこの文字列しか残らない。
