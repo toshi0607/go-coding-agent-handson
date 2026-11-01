@@ -79,10 +79,9 @@ func run(oneShot string) error {
 	if err != nil {
 		return err
 	}
-	// 以降は解決済みの絶対パス(ws.Root())を使う。os.Getwd() の値を
-	// そのまま使い回すと、macOSで /tmp が /private/tmp のリンクである
-	// ために「システムプロンプトに書かれた作業ディレクトリ」と
-	// 「実際の封じ込め境界」が食い違う。
+	// 以降の表示には解決済みの絶対パス(ws.Root())を使う。os.Getwd() の値は、
+	// macOSで /tmp が /private/tmp のリンクであるために、ファイル系ツールと
+	// システムプロンプトが使う作業ディレクトリと食い違うことがある。
 	workDir = ws.Root()
 
 	// --- 設定ファイルの信頼確認 ---
@@ -162,7 +161,7 @@ func run(oneShot string) error {
 	for _, s := range skills {
 		skillSummaries = append(skillSummaries, prompt.SkillSummary{Name: s.Name, Description: s.Description})
 	}
-	systemPrompt := prompt.Build(prompt.Options{WorkDir: workDir, Skills: skillSummaries})
+	systemPrompt := prompt.Build(prompt.Options{Workspace: ws, Skills: skillSummaries})
 	hookRunner := hooks.NewRunner(settings.Hooks)
 
 	// --- サブエージェントの組み立て ---

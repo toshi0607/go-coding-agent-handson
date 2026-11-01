@@ -13,10 +13,11 @@ package prompt
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/toshi0607/go-coding-agent-handson/steps/08-mcp/tools"
 )
 
 // MemoryFileName はプロジェクトメモリのファイル名。
@@ -33,8 +34,8 @@ const basePrompt = `あなたはターミナルで動くコーディングエー
 
 // Options は Build に渡す情報。
 type Options struct {
-	// WorkDir は作業ディレクトリ(CLAUDE.md の探索場所)。
-	WorkDir string
+	// Workspace は作業ディレクトリ。CLAUDE.md もここを通して読む。
+	Workspace *tools.Workspace
 }
 
 // Build はシステムプロンプトを組み立てる。
@@ -48,11 +49,17 @@ func Build(opts Options) string {
 - 作業ディレクトリ: %s
 - OS: %s
 - 今日の日付: %s`,
-		opts.WorkDir, runtime.GOOS, time.Now().Format("2006-01-02"))
+		opts.Workspace.Root(), runtime.GOOS, time.Now().Format("2006-01-02"))
 
 	// CLAUDE.md があれば「プロジェクトメモリ」として全文を注入する。
 	// なければ何も足さない(存在しないセクションでプロンプトを汚さない)。
-	memory, err := os.ReadFile(filepath.Join(opts.WorkDir, MemoryFileName))
+	// CLAUDE.md が作業ディレクトリの外(~/.ssh/id_rsa など)を指すリンクなら
+	// 読み込まない。ファイル系ツールと同じく Workspace でパスを解決する。
+	path, err := opts.Workspace.Resolve(MemoryFileName)
+	if err != nil {
+		return b.String()
+	}
+	memory, err := os.ReadFile(path)
 	if err == nil && len(memory) > 0 {
 		fmt.Fprintf(&b, `
 

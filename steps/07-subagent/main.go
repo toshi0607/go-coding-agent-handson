@@ -69,11 +69,6 @@ func run(oneShot string) error {
 	if err != nil {
 		return err
 	}
-	// 以降は解決済みの絶対パス(ws.Root())を使う。os.Getwd() の値を
-	// そのまま使い回すと、macOSで /tmp が /private/tmp のリンクである
-	// ために「システムプロンプトに書かれた作業ディレクトリ」と
-	// 「実際の封じ込め境界」が食い違う。
-	workDir = ws.Root()
 
 	// --- ツールの組み立て ---
 	// 組み込みツール + Taskツール(サブエージェント)。
@@ -123,7 +118,7 @@ func run(oneShot string) error {
 	if m := os.Getenv("ANTHROPIC_MODEL"); m != "" {
 		model = anthropic.Model(m)
 	}
-	systemPrompt := prompt.Build(prompt.Options{WorkDir: workDir})
+	systemPrompt := prompt.Build(prompt.Options{Workspace: ws})
 
 	// --- サブエージェントの組み立て ---
 	// 親と同じツールを持つが、
