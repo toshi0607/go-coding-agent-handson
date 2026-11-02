@@ -221,8 +221,7 @@ func repl(ctx context.Context, a *agent.Agent, commands *command.Registry, stdin
 			continue
 		}
 
-		if commands.IsCommand(input) {
-			result := commands.Execute(input)
+		if result, ok := commands.Execute(input); ok {
 			if result.Clear {
 				a.ClearHistory()
 			}
