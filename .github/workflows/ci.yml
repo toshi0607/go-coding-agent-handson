@@ -13,9 +13,9 @@ jobs:
     name: build / vet / test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v7.0.1
 
-      - uses: actions/setup-go@v7
+      - uses: actions/setup-go@v7.0.0
         with:
           # Goのバージョンは go.mod を唯一の情報源にする(二重管理を避ける)。
           go-version-file: go.mod
