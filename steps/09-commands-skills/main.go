@@ -222,10 +222,10 @@ func repl(ctx context.Context, a *agent.Agent, commands *command.Registry, stdin
 		}
 
 		if result, ok := commands.Execute(input); ok {
-			if result.Clear {
+			switch {
+			case result.Clear:
 				a.ClearHistory()
-			}
-			if result.Compact {
+			case result.Compact:
 				if err := a.Compact(ctx); err != nil {
 					fmt.Println("エラー:", err)
 					continue
