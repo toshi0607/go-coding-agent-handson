@@ -20,13 +20,12 @@ steps/          穴埋め式の段階実装(本のPart 1に対応。下の「進
 └── 10-streaming-hooks/  ストリーミングとhooks
 final/          完成形のミニコーディングエージェント
 ├── main.go       部品の組み立てとREPL
-├── agent/        エージェントループ本体 + サブエージェント(taskツール)
+├── agent/        エージェントループ本体 + サブエージェント(taskツール) + compaction・ツール結果の切り詰め
 ├── llm/          LLM呼び出しの境界(実API / 録画リプレイ)
 ├── tools/        read_file, list_files, edit_file, bash + 作業ディレクトリの封じ込め
 ├── permission/   承認フロー(allowlist)
 ├── prompt/       システムプロンプト + CLAUDE.md読み込み
 ├── skill/        スキル(段階的開示によるプロンプトのパッケージ化)
-├── contextmgr/   トークン管理・compaction・ツール結果の切り詰め
 ├── mcp/          MCPクライアント(公式Go SDK、stdio transport)
 ├── command/      スラッシュコマンド
 ├── hooks/        PreToolUse / PostToolUse フック

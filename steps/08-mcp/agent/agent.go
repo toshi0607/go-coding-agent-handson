@@ -17,7 +17,6 @@ import (
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/toshi0607/go-coding-agent-handson/steps/08-mcp/contextmgr"
 	"github.com/toshi0607/go-coding-agent-handson/steps/08-mcp/llm"
 	"github.com/toshi0607/go-coding-agent-handson/steps/08-mcp/permission"
 	"github.com/toshi0607/go-coding-agent-handson/steps/08-mcp/tools"
@@ -50,8 +49,10 @@ type Config struct {
 	Tools []tools.Tool
 	// Permission はツール実行の承認担当。
 	Permission *permission.Checker
-	// ContextManager はコンテキスト管理担当。
-	ContextManager *contextmgr.Manager
+	// CompactThreshold は自動compactionを始めるトークン数(0ならデフォルト)。
+	CompactThreshold int
+	// MaxToolResultChars はツール結果1件あたりの文字数上限(0ならデフォルト)。
+	MaxToolResultChars int
 	// Out は途中経過(ストリーミングテキスト、ツール実行表示)の出力先。
 	Out io.Writer
 	// MaxIterations は1ターンでLLMを呼ぶ回数の上限(0ならデフォルト)。
@@ -60,15 +61,16 @@ type Config struct {
 
 // Agent は会話履歴を持つエージェント。
 type Agent struct {
-	client        llm.Client
-	model         anthropic.Model
-	systemPrompt  string
-	tools         []tools.Tool
-	toolsByName   map[string]tools.Tool
-	perm          *permission.Checker
-	ctxmgr        *contextmgr.Manager
-	out           io.Writer
-	maxIterations int
+	client             llm.Client
+	model              anthropic.Model
+	systemPrompt       string
+	tools              []tools.Tool
+	toolsByName        map[string]tools.Tool
+	perm               *permission.Checker
+	compactThreshold   int
+	maxToolResultChars int
+	out                io.Writer
+	maxIterations      int
 
 	// history は会話履歴。Messages APIはステートレスなので、
 	// 毎回の呼び出しで履歴全体を送り直す。「会話の記憶」の実体は
@@ -94,24 +96,29 @@ func New(cfg Config) *Agent {
 	if maxIter <= 0 {
 		maxIter = defaultMaxIterations
 	}
-	ctxMgr := cfg.ContextManager
-	if ctxMgr == nil {
-		ctxMgr = contextmgr.NewManager()
+	compactThreshold := cfg.CompactThreshold
+	if compactThreshold <= 0 {
+		compactThreshold = defaultCompactThreshold
+	}
+	maxResultChars := cfg.MaxToolResultChars
+	if maxResultChars <= 0 {
+		maxResultChars = defaultMaxToolResultChars
 	}
 	perm := cfg.Permission
 	if perm == nil {
 		perm = permission.New(permission.Config{})
 	}
 	return &Agent{
-		client:        cfg.Client,
-		model:         cfg.Model,
-		systemPrompt:  cfg.SystemPrompt,
-		tools:         cfg.Tools,
-		toolsByName:   byName,
-		perm:          perm,
-		ctxmgr:        ctxMgr,
-		out:           out,
-		maxIterations: maxIter,
+		client:             cfg.Client,
+		model:              cfg.Model,
+		systemPrompt:       cfg.SystemPrompt,
+		tools:              cfg.Tools,
+		toolsByName:        byName,
+		perm:               perm,
+		compactThreshold:   compactThreshold,
+		maxToolResultChars: maxResultChars,
+		out:                out,
+		maxIterations:      maxIter,
 	}
 }
 
@@ -122,8 +129,8 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 	// ツールループの途中で履歴を要約すると、tool_use と tool_result の
 	// 対応が壊れてAPIエラーになるため、「どこでcompactするか」は
 	// 見た目以上に重要な判断である。
-	if a.ctxmgr.ShouldCompact(a.lastUsageTokens) {
-		if err := a.CompactHistory(ctx); err != nil {
+	if a.shouldCompact() {
+		if err := a.Compact(ctx); err != nil {
 			return "", err
 		}
 	}
@@ -237,7 +244,7 @@ func (a *Agent) executeTool(ctx context.Context, block anthropic.ContentBlockUni
 		result = "(出力は空です)"
 	}
 
-	result = a.ctxmgr.TruncateToolResult(result)
+	result = truncateToolResult(result, a.maxToolResultChars)
 	return anthropic.NewToolResultBlock(block.ID, result, false)
 }
 
@@ -269,24 +276,6 @@ func (a *Agent) buildParams() anthropic.MessageNewParams {
 		})
 	}
 	return params
-}
-
-// CompactHistory は履歴を要約に置き換える(自動発動用)。
-func (a *Agent) CompactHistory(ctx context.Context) error {
-	if len(a.history) == 0 {
-		return nil
-	}
-	fmt.Fprintln(a.out, "(コンテキストを圧縮しています...)")
-	// 要約リクエストは通常のターンと同じ形(system・tools付き)で送る。
-	// buildParams() をそのまま渡せば、履歴に tool_use が含まれていても
-	// リクエストとして矛盾しない。
-	compacted, err := a.ctxmgr.Compact(ctx, a.client, a.buildParams())
-	if err != nil {
-		return err
-	}
-	a.history = compacted
-	a.lastUsageTokens = 0
-	return nil
 }
 
 // History は現在の会話履歴を返す(テスト・デバッグ用)。

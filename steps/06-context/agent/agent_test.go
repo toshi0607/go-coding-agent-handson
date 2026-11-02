@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/anthropics/anthropic-sdk-go"
-	"github.com/toshi0607/go-coding-agent-handson/steps/06-context/contextmgr"
 	"github.com/toshi0607/go-coding-agent-handson/steps/06-context/llm"
 	"github.com/toshi0607/go-coding-agent-handson/steps/06-context/permission"
 	"github.com/toshi0607/go-coding-agent-handson/steps/06-context/tools"
@@ -242,7 +241,7 @@ func TestCompactionHappensOnlyAtTurnBoundary(t *testing.T) {
 		Tools:      []tools.Tool{tool},
 		Permission: allowAll("spin"),
 		// 閾値1 = 1回でもレスポンスを受け取れば「圧縮すべき」状態になる。
-		ContextManager: &contextmgr.Manager{CompactThreshold: 1, MaxToolResultChars: 1000},
+		CompactThreshold: 1, MaxToolResultChars: 1000,
 	})
 
 	if _, err := a.Run(t.Context(), "やって"); err != nil {
@@ -316,10 +315,7 @@ func TestAutoCompaction(t *testing.T) {
 	)
 	a := New(Config{
 		Client: client, Model: "claude-opus-5-5",
-		ContextManager: &contextmgr.Manager{
-			CompactThreshold:   100, // ReplayClientのusageは毎回150(入力100+出力50)
-			MaxToolResultChars: contextmgr.DefaultMaxToolResultChars,
-		},
+		CompactThreshold: 100, // ReplayClientのusageは毎回150(入力100+出力50)
 	})
 
 	if _, err := a.Run(t.Context(), "1回目"); err != nil {
