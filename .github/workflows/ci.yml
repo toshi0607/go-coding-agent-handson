@@ -42,7 +42,7 @@ jobs:
       - name: go test
         run: go test -race -count=1 ./...
 
-      # 教材としての不変条件(穴あきstepが赤であること、step 10 = final など)。
+      # 教材としての不変条件(穴あきstepが赤であること、step 11 = final など)。
       # 詳細は scripts/check-steps.sh のコメントを参照。
       - name: 教材の不変条件
         run: make check-steps

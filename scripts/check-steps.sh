@@ -11,7 +11,7 @@
 #      落ちていても合格になってしまい、チェッカー自身が壊れていることに
 #      気づけないため、失敗したパッケージの集合と、穴(TODOマーカー)を
 #      含むパッケージの集合が一致することまで見る
-#   3. step 10 = final: step 10 の解答は final そのものなので、
+#   3. step 11 = final: 最後のstep(step 11)の解答は final そのものなので、
 #      穴のある宣言を除いて両者は一致すること(scripts/sync_check.go)
 #
 # 3が効くのは、final にバグ修正を入れて steps に反映し忘れたときである。
@@ -24,7 +24,7 @@ set -uo pipefail
 cd "$(dirname "$0")/.."
 
 readonly FINAL_DIR="final"
-readonly LAST_STEP_DIR="steps/10-streaming-hooks"
+readonly LAST_STEP_DIR="steps/11-hooks"
 
 failed=0
 
@@ -115,13 +115,13 @@ for dir in steps/*/; do
 	ok "$step: ビルド・vetは通り、穴のある $(echo "$expected" | wc -l | tr -d ' ') パッケージだけが失敗(想定どおり)"
 done
 
-# --- 3. step 10 = final ---
+# --- 3. step 11 = final ---
 #
 # ファイル単位ではなくトップレベル宣言の単位で比較する。穴のあるファイルを
 # 丸ごと除外すると、同じファイルにある他の関数(hooks.go の RunPost など)の
 # 食い違いを見逃すためである。詳細は scripts/sync_check.go を参照。
-echo "[3/3] step 10 と final の一致(穴のある宣言を除く)"
-if ! go run scripts/sync_check.go "$FINAL_DIR" "$LAST_STEP_DIR" 'TODO(step10'; then
+echo "[3/3] step 11 と final の一致(穴のある宣言を除く)"
+if ! go run scripts/sync_check.go "$FINAL_DIR" "$LAST_STEP_DIR" 'TODO(step11'; then
 	failed=1
 fi
 

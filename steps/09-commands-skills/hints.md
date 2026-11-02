@@ -36,4 +36,4 @@ func isValidName(name string) bool {
 
 ## 答え合わせ
 
-解答は次のstepの同じファイル([../10-streaming-hooks/prompt/prompt.go](../10-streaming-hooks/prompt/prompt.go)、[../10-streaming-hooks/command/command.go](../10-streaming-hooks/command/command.go))に埋まっています。
+解答は次のstepの同じファイル([../10-streaming/prompt/prompt.go](../10-streaming/prompt/prompt.go)、[../10-streaming/command/command.go](../10-streaming/command/command.go))に埋まっています。
