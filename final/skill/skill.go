@@ -56,11 +56,17 @@ type Skill struct {
 
 const (
 	// maxDescriptionChars は説明の長さ上限。
-	// 説明はシステムプロンプトに毎ターン載るので、ここが無制限だと
-	// 「目次だけ載せるから軽い」という前提が崩れる。
-	maxDescriptionChars = 200
+	// Agent Skills の仕様(https://agentskills.io/specification)は
+	// description を1〜1024文字と定めているので、それに合わせる。
+	// 説明はシステムプロンプトに載って毎回のリクエストで送られるので、
+	// ここが無制限だと「目次だけ載せるから軽い」という前提が崩れる。
+	// 仕様より長い説明が書かれていても、ここで切り詰める。
+	maxDescriptionChars = 1024
 
-	// maxBodyBytes は本文の読み込み上限。
+	// maxBodyBytes は SKILL.md を読み込むときの安全上限。
+	// 巨大なファイルを丸ごとメモリに読み込まないためのもので、
+	// 本文の推奨サイズではない。仕様は SKILL.md を500行未満に収めることを
+	// 推奨している。
 	maxBodyBytes = 256 * 1024
 )
 
