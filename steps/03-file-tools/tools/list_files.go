@@ -41,7 +41,7 @@ func (l *ListFiles) Run(ctx context.Context, input json.RawMessage) (string, err
 		Path string `json:"path"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("入力のパースに失敗: %w", err)
+		return "", fmt.Errorf("入力のパースに失敗しました: %w", err)
 	}
 	root := filepath.Join(l.workDir, in.Path)
 

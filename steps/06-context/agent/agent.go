@@ -2,11 +2,11 @@
 //
 // エージェントの正体は次のループである:
 //
-//	ユーザー入力 → LLM呼び出し → (ツール実行 → 結果を返してLLM再呼び出し)* → 応答
+//	ユーザー入力 → LLM呼び出し → (ツール実行 → 結果を返してLLM再呼び出し)* → レスポンス
 //
 // LLMは「次にどのツールを使うか」を決めるだけで、実際に手を動かす
 // (ファイルを読む、コマンドを実行する)のはこちら側のコードである。
-// この役割分担と、その間を往復するメッセージの積み方さえ理解すれば、
+// この役割分担と、その間を往復するメッセージの足し方さえ理解すれば、
 // コーディングエージェントの骨格は理解できたことになる。
 package agent
 
@@ -25,18 +25,18 @@ import (
 
 const (
 	// maxTokensPerTurn は1回のLLM呼び出しの出力上限。
-	// 既定のモデルは常に思考(thinking)し、その分もこの上限に数えられるので、
-	// 見える応答の長さだけで決めると足りなくなる。一方、ストリーミングしない
+	// デフォルトのモデルは常に思考(thinking)し、その分もこの上限に数えられるので、
+	// 見えるレスポンスの長さだけで決めると足りなくなる。一方、ストリーミングしない
 	// 呼び出しでもHTTPタイムアウトに収まるよう、大きくしすぎてもいない。
 	maxTokensPerTurn = 16000
 
 	// maxDisplayRunes はツール実行を画面に表示するときの引数の文字数上限。
 	maxDisplayRunes = 120
 
-	// defaultMaxIterations は1ユーザーターン内のLLM往復回数の上限。
+	// defaultMaxIterations は1ターンでLLMを呼ぶ回数の上限。
 	// LLMがツールを呼び続ける限りループは回るので、暴走(同じ失敗を
 	// 延々と繰り返す等)への保険として上限を置く。上限に達したら
-	// 打ち切ってユーザーに制御を返す。
+	// ターンを終えてユーザーに制御を返す。
 	defaultMaxIterations = 25
 )
 
@@ -54,7 +54,7 @@ type Config struct {
 	ContextManager *contextmgr.Manager
 	// Out は途中経過(ストリーミングテキスト、ツール実行表示)の出力先。
 	Out io.Writer
-	// MaxIterations は1ターン内のLLM往復上限(0ならデフォルト)。
+	// MaxIterations は1ターンでLLMを呼ぶ回数の上限(0ならデフォルト)。
 	MaxIterations int
 }
 
@@ -116,7 +116,7 @@ func New(cfg Config) *Agent {
 }
 
 // Run は1ユーザーターンを処理する。ツール実行を挟みながらLLMとの
-// 往復を繰り返し、最終的なテキスト応答を返す。
+// 往復を繰り返し、最終的なテキストのレスポンスを返す。
 func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 	// TODO(step06-2): 自動compactionを発動させる。
 	//
@@ -132,16 +132,16 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 	a.history = append(a.history, anthropic.NewUserMessage(anthropic.NewTextBlock(userInput)))
 
 	// エージェントループ本体。
-	// 「LLMがツールを使い終わって、テキストだけの応答を返してくるまで」
+	// 「LLMがツールを使い終わって、テキストだけのレスポンスを返してくるまで」
 	// が1ユーザーターン。
 	for range a.maxIterations {
 		resp, err := a.client.Complete(ctx, a.buildParams())
 		if err != nil {
-			return "", fmt.Errorf("LLM呼び出しに失敗: %w", err)
+			return "", fmt.Errorf("LLMの呼び出しに失敗しました: %w", err)
 		}
 		fmt.Fprintln(a.out, textOf(resp))
 
-		// アシスタントの応答は tool_use ブロックも含めて丸ごと履歴に積む。
+		// アシスタントのレスポンスは tool_use ブロックも含めて丸ごと履歴に足す。
 		// tool_use を欠いた履歴に tool_result だけ足すとAPIに拒否される。
 		a.history = append(a.history, resp.ToParam())
 		a.lastUsageTokens = int(resp.Usage.InputTokens + resp.Usage.OutputTokens)
@@ -152,8 +152,8 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 		// これは罠がある。stop_reason は tool_use / end_turn の2値ではなく、
 		// max_tokens(出力上限で打ち切られた)や refusal(安全上の拒否)も
 		// あり、しかも max_tokens では tool_use ブロックが生成途中で
-		// 切れていることがある。その応答をそのまま「ターン終了」として
-		// 履歴に残すと、tool_use に対応する tool_result が永久に積まれず、
+		// 切れていることがある。そのレスポンスをそのまま「ターン終了」として
+		// 履歴に残すと、tool_use に対応する tool_result が永久に足されず、
 		// 以降のリクエストがすべてAPIに拒否される——会話が死ぬ。
 		//
 		// そのため判定は「stop_reason」ではなく「未処理のtool_useが
@@ -161,32 +161,32 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 		toolUses := toolUseBlocks(resp)
 
 		if resp.StopReason != anthropic.StopReasonToolUse {
-			// ターンは終わり。ただし中断された応答に tool_use が
+			// ターンは終わり。ただし中断されたレスポンスに tool_use が
 			// 残っている場合は、打ち切りを伝える tool_result で
 			// 必ず対応を閉じてから返す(履歴の整合性を保つ)。
 			if len(toolUses) > 0 {
 				var results []anthropic.ContentBlockParamUnion
 				for _, block := range toolUses {
 					results = append(results, anthropic.NewToolResultBlock(block.ID,
-						fmt.Sprintf("応答が %s で中断されたため、このツールは実行されませんでした", resp.StopReason), true))
+						fmt.Sprintf("レスポンスが %s で中断されたため、このツールは実行されませんでした", resp.StopReason), true))
 				}
 				a.history = append(a.history, anthropic.NewUserMessage(results...))
 			}
 			if resp.StopReason == anthropic.StopReasonMaxTokens {
-				fmt.Fprintln(a.out, "(出力が長すぎて途中で打ち切られました)")
+				fmt.Fprintln(a.out, "(出力がmax_tokensの上限に達したため、レスポンスが途中で終わっています)")
 			}
 			return textOf(resp), nil
 		}
 
 		// stop_reason が tool_use なのに tool_use ブロックが無い、という
-		// 矛盾した応答もありうる。空の user メッセージを送るとAPIエラーに
+		// 矛盾したレスポンスもありうる。空の user メッセージを送るとAPIエラーに
 		// なるので、ここで打ち切る。
 		if len(toolUses) == 0 {
 			return textOf(resp), nil
 		}
 
 		// ツールを実行し、結果を1つのuserメッセージにまとめて返す。
-		// LLMは1回の応答で複数のツールを呼ぶことがあり(並列ツール呼び出し)、
+		// LLMは1回のレスポンスで複数のツールを呼ぶことがあり(並列ツール呼び出し)、
 		// その場合もtool_resultは全部まとめて1メッセージで返すのが作法。
 		var results []anthropic.ContentBlockParamUnion
 		for _, block := range toolUses {
@@ -195,7 +195,7 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 		a.history = append(a.history, anthropic.NewUserMessage(results...))
 	}
 
-	msg := fmt.Sprintf("(%d回の往復上限に達したため打ち切りました)", a.maxIterations)
+	msg := fmt.Sprintf("(LLMの呼び出しが上限の%d回に達したため、ターンを終了しました)", a.maxIterations)
 	fmt.Fprintln(a.out, msg)
 	return msg, nil
 }
@@ -229,12 +229,13 @@ func (a *Agent) executeTool(ctx context.Context, block anthropic.ContentBlockUni
 		return anthropic.NewToolResultBlock(block.ID, err.Error(), true)
 	}
 
-	// 空文字のツール結果は tool_result に空のテキストブロックを作り、
-	// APIに拒否される。空ファイルを読んだ、出力のないコマンドを実行した、
-	// といった正常なケースでも起こるので、ここで必ず埋める。
+	// 空文字のツール結果は、空のままでも Messages API は受け付けるが、
+	// ツールが成功して出力が無かったことをLLMが文として読み取れるように、
+	// 文字列に置き換える。空ファイルを読んだ、出力のないコマンドを実行した、
+	// といった正常なケースで起こる。
 	// 個々のツールに任せず1箇所で処理するのは、権限チェックと同じ理由。
 	if result == "" {
-		result = "(空の結果)"
+		result = "(出力は空です)"
 	}
 
 	result = a.ctxmgr.TruncateToolResult(result)

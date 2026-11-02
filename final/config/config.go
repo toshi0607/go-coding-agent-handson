@@ -128,7 +128,7 @@ func loadJSON(path string, v any) error {
 		return err
 	}
 	if err := json.Unmarshal(data, v); err != nil {
-		return fmt.Errorf("%s のパースに失敗: %w", path, err)
+		return fmt.Errorf("%s のパースに失敗しました: %w", path, err)
 	}
 	return nil
 }

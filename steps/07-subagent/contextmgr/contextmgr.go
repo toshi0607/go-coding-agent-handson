@@ -1,13 +1,13 @@
 // Package contextmgr はコンテキストウィンドウの管理を担う。
 //
 // LLMのコンテキストウィンドウは有限で、会話履歴・ツール結果は
-// すべてそこに積まれていく。放っておくと:
+// すべてそこに足されていく。放っておくと:
 //  1. 上限超過でAPIエラーになる
 //  2. 上限に達しなくても、入力トークン分の課金が毎ターン膨らむ
-//  3. 長すぎるコンテキストは応答品質も下げる
+//  3. 長すぎるコンテキストはレスポンスの品質も下げる
 //
 // 対策は「入れる量を減らす」(ツール結果の切り詰め)と
-// 「積んだものを圧縮する」(compaction = 履歴の要約)の2本柱。
+// 「足したものを圧縮する」(compaction = 履歴の要約)の2本柱。
 package contextmgr
 
 import (
@@ -64,12 +64,17 @@ func NewManager() *Manager {
 // 「文字数で切り詰めた」と言いながらバイト数で切るのは、日本語を
 // 扱うツールでは実害のある嘘になる。
 func (m *Manager) TruncateToolResult(result string) string {
+	// 1文字は1バイト以上なので、バイト数が上限以下なら文字数も上限以下。
+	// その場合は文字を数えずにそのまま返す。
+	if len(result) <= m.MaxToolResultChars {
+		return result
+	}
 	head, total := truncateRunes(result, m.MaxToolResultChars)
 	if total <= m.MaxToolResultChars {
 		return result
 	}
 	return head +
-		fmt.Sprintf("\n... (長すぎるため %d 文字で切り詰めました。全体は %d 文字あります。続きが必要なら範囲を絞って取得してください)", m.MaxToolResultChars, total)
+		fmt.Sprintf("\n... (ツール結果が長すぎるため、先頭の %d 文字だけを残して切り詰めました。全体は %d 文字あります。続きが必要なら範囲を絞って取得してください)", m.MaxToolResultChars, total)
 }
 
 // truncateRunes は s の先頭 max 文字と、s 全体の文字数を返す。
@@ -91,7 +96,7 @@ func truncateRunes(s string, max int) (head string, total int) {
 // ShouldCompact は直近のAPIレスポンスのトークン使用量から、
 // compactionすべきかを判定する。
 //
-// トークン数を自前で数えるのは難しい(トークナイザはモデル依存)ので、
+// トークン数を自前で数えるのは難しい(トークナイザーはモデル依存)ので、
 // APIレスポンスの usage(実測値)を使う。これが最も正確で、かつタダである。
 func (m *Manager) ShouldCompact(lastUsageTokens int) bool {
 	return lastUsageTokens > m.CompactThreshold
@@ -103,7 +108,7 @@ const summaryPrompt = `これまでの会話を、この続きから作業を再
 - 未完了のタスクと次にやるべきこと
 要約以外の文章(前置きなど)は不要です。`
 
-// summaryMaxTokens は要約1回分の出力上限。既定のモデルでは思考の分もここに数えられる。
+// summaryMaxTokens は要約1回分の出力上限。デフォルトのモデルでは思考の分もここに数えられる。
 const summaryMaxTokens = 8192
 
 // Compact は会話履歴を要約して置き換える。
@@ -125,7 +130,7 @@ const summaryMaxTokens = 8192
 // 圧縮対象の履歴には tool_use / tool_result ブロックが含まれており、
 // tools を伴わないリクエストでそれらを送るとAPIに拒否される。
 // 「要約用の軽いリクエスト」を別途組み立てたくなるが、履歴の中身と
-// リクエストのパラメータには対応関係があり、勝手に外せない。
+// リクエストのパラメーターには対応関係があり、勝手に外せない。
 func (m *Manager) Compact(ctx context.Context, client llm.Client, base anthropic.MessageNewParams) ([]anthropic.MessageParam, error) {
 	params := base
 	params.MaxTokens = summaryMaxTokens
@@ -140,7 +145,7 @@ func (m *Manager) Compact(ctx context.Context, client llm.Client, base anthropic
 
 	resp, err := client.Complete(ctx, params)
 	if err != nil {
-		return nil, fmt.Errorf("compaction用の要約に失敗: %w", err)
+		return nil, fmt.Errorf("compaction用の要約に失敗しました: %w", err)
 	}
 
 	var summary strings.Builder

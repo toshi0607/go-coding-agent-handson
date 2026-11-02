@@ -39,7 +39,7 @@ func (c *ReplayClient) next(params anthropic.MessageNewParams) (*anthropic.Messa
 	}
 	var msg anthropic.Message
 	if err := json.Unmarshal([]byte(c.responses[c.index]), &msg); err != nil {
-		return nil, fmt.Errorf("llm.ReplayClient: レスポンス%dのパースに失敗: %w", c.index, err)
+		return nil, fmt.Errorf("llm.ReplayClient: レスポンス%dのパースに失敗しました: %w", c.index, err)
 	}
 	c.index++
 	return &msg, nil

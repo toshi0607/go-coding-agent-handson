@@ -138,7 +138,7 @@ func TestLoadSortsAndSkipsInvalidEntries(t *testing.T) {
 }
 
 // スキルは「リポジトリのファイルを読んでプロンプトに載せる」機能なので、
-// 封じ込めを通さないと外部ファイルの中身がLLMに漏れる。
+// Workspace を通さないと外部ファイルの中身がLLMに漏れる。
 // しかもスキルは無条件許可なので承認プロンプトすら出ない。
 func TestLoadIsContained(t *testing.T) {
 	if runtime.GOOS == "windows" {

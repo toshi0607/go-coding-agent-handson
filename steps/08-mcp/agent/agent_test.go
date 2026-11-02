@@ -50,7 +50,7 @@ func TestTextOnlyTurn(t *testing.T) {
 	if got != "こんにちは!" {
 		t.Errorf("got %q", got)
 	}
-	// 履歴 = ユーザー入力 + アシスタント応答 の2件。
+	// 履歴 = ユーザー入力 + アシスタントのレスポンス の2件。
 	if len(a.History()) != 2 {
 		t.Errorf("履歴は2件のはず: %d件", len(a.History()))
 	}
@@ -160,19 +160,19 @@ func TestMaxIterationsStopsRunawayLoop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if !strings.Contains(got, "打ち切り") {
-		t.Errorf("上限到達の告知がない: %q", got)
+	if !strings.Contains(got, "上限の") {
+		t.Errorf("上限到達の報告がない: %q", got)
 	}
 	if tool.calls != 2 {
 		t.Errorf("上限2回で止まるはず: %d回", tool.calls)
 	}
 }
 
-// max_tokens で応答が切れると、生成途中の tool_use が履歴に残ることがある。
-// 対応する tool_result を積まないまま次のターンに進むと、以降すべての
+// max_tokens でレスポンスが切れると、生成途中の tool_use が履歴に残ることがある。
+// 対応する tool_result を足さないまま次のターンに進むと、以降すべての
 // リクエストがAPIに拒否されて会話が死ぬ。その回帰テスト。
 func TestInterruptedToolUseIsClosedOut(t *testing.T) {
-	// stop_reason: max_tokens だが tool_use ブロックを含む応答。
+	// stop_reason: max_tokens だが tool_use ブロックを含むレスポンス。
 	interrupted := `{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5-5",
 		"content":[{"type":"text","text":"編集します"},
 		           {"type":"tool_use","id":"toolu_cut","name":"edit_file","input":{}}],
@@ -201,7 +201,7 @@ func TestInterruptedToolUseIsClosedOut(t *testing.T) {
 	}
 }
 
-// stop_reason が tool_use なのに tool_use ブロックがない矛盾応答。
+// stop_reason が tool_use なのに tool_use ブロックがない矛盾したレスポンス。
 // 空のuserメッセージを送らず、上限まで無駄な往復もしないこと。
 func TestToolUseStopReasonWithoutToolBlocks(t *testing.T) {
 	inconsistent := `{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5-5",
@@ -224,10 +224,10 @@ func TestToolUseStopReasonWithoutToolBlocks(t *testing.T) {
 }
 
 func TestTaskToolRunsSubAgent(t *testing.T) {
-	// 応答は親→サブ→親の順に消費される:
+	// レスポンスは親→サブ→親の順に消費される:
 	//   1. 親: taskツールを呼ぶ
 	//   2. サブ: 調査結果を返す(サブエージェントのターン)
-	//   3. 親: tool_result(=サブの結論)を受けて最終応答
+	//   3. 親: tool_result(=サブの結論)を受けて最終的なレスポンス
 	client := llm.NewReplayClient(
 		llm.ToolUseResponse("toolu_1", "task", `{"description":"調査","prompt":"認証処理の場所を調べて"}`),
 		llm.TextResponse("認証処理は auth/login.go にあります"),
@@ -263,7 +263,7 @@ func TestTaskToolRunsSubAgent(t *testing.T) {
 	}
 }
 
-// compactionを「ターン境界だけ」で行うことの不変条件テスト。
+// compactionを「ターンの境目だけ」で行うことの不変条件テスト。
 //
 // ツールループの途中で履歴を要約すると、tool_use に対応する
 // tool_result が要約に飲み込まれ、以降のリクエストがすべてAPIに
@@ -281,7 +281,7 @@ func TestCompactionHappensOnlyAtTurnBoundary(t *testing.T) {
 		Client: client, Model: "claude-opus-5-5",
 		Tools:      []tools.Tool{tool},
 		Permission: allowAll("spin"),
-		// 閾値1 = 1回でも応答を受け取れば「圧縮すべき」状態になる。
+		// 閾値1 = 1回でもレスポンスを受け取れば「圧縮すべき」状態になる。
 		ContextManager: &contextmgr.Manager{CompactThreshold: 1, MaxToolResultChars: 1000},
 	})
 
@@ -306,7 +306,7 @@ func TestCompactionHappensOnlyAtTurnBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 	if n := len(client.Requests()); n != 4 {
-		t.Errorf("ターン境界での圧縮が走っていない: LLM呼び出し%d回", n)
+		t.Errorf("ターンの境目での圧縮が走っていない: LLM呼び出し%d回", n)
 	}
 	assertToolUsesAreClosed(t, a.History())
 }

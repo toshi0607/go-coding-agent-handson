@@ -19,7 +19,7 @@ type ListFiles struct {
 	ws *Workspace
 }
 
-// NewListFiles は作業ディレクトリに封じ込められた list_files を作る。
+// NewListFiles は作業ディレクトリの中に限定された list_files を作る。
 func NewListFiles(ws *Workspace) *ListFiles { return &ListFiles{ws: ws} }
 
 func (*ListFiles) Name() string { return "list_files" }
@@ -41,7 +41,7 @@ func (l *ListFiles) Run(ctx context.Context, input json.RawMessage) (string, err
 		Path string `json:"path"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("入力のパースに失敗: %w", err)
+		return "", fmt.Errorf("入力のパースに失敗しました: %w", err)
 	}
 	root, err := l.ws.Resolve(in.Path)
 	if err != nil {

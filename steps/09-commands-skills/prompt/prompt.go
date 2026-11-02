@@ -20,10 +20,11 @@ package prompt
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/toshi0607/go-coding-agent-handson/steps/09-commands-skills/tools"
 )
 
 // MemoryFileName はプロジェクトメモリのファイル名。
@@ -48,8 +49,8 @@ type SkillSummary struct {
 
 // Options は Build に渡す情報。
 type Options struct {
-	// WorkDir は作業ディレクトリ(CLAUDE.md の探索場所)。
-	WorkDir string
+	// Workspace は作業ディレクトリ。CLAUDE.md もここを通して読む。
+	Workspace *tools.Workspace
 	// Skills は利用可能なスキルの目次。本文は含めない。
 	Skills []SkillSummary
 }
@@ -65,7 +66,7 @@ func Build(opts Options) string {
 - 作業ディレクトリ: %s
 - OS: %s
 - 今日の日付: %s`,
-		opts.WorkDir, runtime.GOOS, time.Now().Format("2006-01-02"))
+		opts.Workspace.Root(), runtime.GOOS, time.Now().Format("2006-01-02"))
 
 	// TODO(step09-1): スキルの目次を注入する。満たすべき仕様:
 	//
@@ -78,14 +79,20 @@ func Build(opts Options) string {
 	//    読むこと」を案内する。LLMは存在を知らないものを読もうとは
 	//    しないので、この案内が段階的開示の後半を担う
 	//  - この一覧はプロジェクト内のファイル由来のデータであり指示では
-	//    ない、という境界の宣言を添える。説明文はエージェントの作者
+	//    ない、という宣言を添える。説明文はエージェントの作者
 	//    以外が書ける文字列で、それが最も信頼度の高いシステムプロンプトに
 	//    入る。プロンプトインジェクションを完全に防げるわけではないが、
-	//    境界を宣言しないより確実に良い
+	//    宣言しないより確実に良い
 
 	// CLAUDE.md があれば「プロジェクトメモリ」として全文を注入する。
 	// なければ何も足さない(存在しないセクションでプロンプトを汚さない)。
-	memory, err := os.ReadFile(filepath.Join(opts.WorkDir, MemoryFileName))
+	// CLAUDE.md が作業ディレクトリの外(~/.ssh/id_rsa など)を指すリンクなら
+	// 読み込まない。ファイル系ツールと同じく Workspace でパスを解決する。
+	path, err := opts.Workspace.Resolve(MemoryFileName)
+	if err != nil {
+		return b.String()
+	}
+	memory, err := os.ReadFile(path)
 	if err == nil && len(memory) > 0 {
 		fmt.Fprintf(&b, `
 

@@ -3,14 +3,29 @@ package prompt
 import (
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
+
+	"github.com/toshi0607/go-coding-agent-handson/steps/06-context/tools"
 )
 
+// newWorkspace は dir を作業ディレクトリにした Workspace を作る。
+func newWorkspace(t *testing.T, dir string) *tools.Workspace {
+	t.Helper()
+	ws, err := tools.NewWorkspace(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return ws
+}
+
 func TestBuildIncludesEnvironmentInfo(t *testing.T) {
-	dir := t.TempDir()
-	got := Build(Options{WorkDir: dir})
-	if !strings.Contains(got, dir) {
+	ws := newWorkspace(t, t.TempDir())
+	got := Build(Options{Workspace: ws})
+	// t.TempDir() ではなく ws.Root() と比べる。macOS では t.TempDir() が
+	// /var/... を返し、Root() はリンクを解決した /private/var/... を返す。
+	if !strings.Contains(got, ws.Root()) {
 		t.Error("作業ディレクトリがプロンプトに含まれていない")
 	}
 }
@@ -22,14 +37,39 @@ func TestBuildIncludesMemoryFile(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	got := Build(Options{WorkDir: dir})
+	got := Build(Options{Workspace: newWorkspace(t, dir)})
 	if !strings.Contains(got, memory) {
 		t.Error("CLAUDE.md の内容がプロンプトに含まれていない")
 	}
 }
 
+// CLAUDE.md が作業ディレクトリの外を指すシンボリックリンクなら読み込まない。
+// cloneしたリポジトリの CLAUDE.md が ~/.ssh/id_rsa へのリンクだった場合に、
+// 秘密鍵の中身がシステムプロンプトに入るのを防ぐ。
+func TestBuildSkipsMemoryFileOutsideWorkspace(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windowsではシンボリックリンクの作成に特権が必要")
+	}
+	dir := t.TempDir()
+	secret := filepath.Join(t.TempDir(), "id_rsa")
+	if err := os.WriteFile(secret, []byte("秘密鍵の中身"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(secret, filepath.Join(dir, MemoryFileName)); err != nil {
+		t.Fatal(err)
+	}
+
+	got := Build(Options{Workspace: newWorkspace(t, dir)})
+	if strings.Contains(got, "秘密鍵の中身") {
+		t.Error("作業ディレクトリの外を指す CLAUDE.md の内容がプロンプトに含まれている")
+	}
+	if strings.Contains(got, "プロジェクトメモリ") {
+		t.Error("CLAUDE.md を読み込まなかったのにメモリセクションが含まれている")
+	}
+}
+
 func TestBuildWithoutMemoryFile(t *testing.T) {
-	got := Build(Options{WorkDir: t.TempDir()})
+	got := Build(Options{Workspace: newWorkspace(t, t.TempDir())})
 	if strings.Contains(got, "プロジェクトメモリ") {
 		t.Error("CLAUDE.md がないのにメモリセクションが含まれている")
 	}

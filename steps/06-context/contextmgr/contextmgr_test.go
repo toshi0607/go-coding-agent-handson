@@ -23,12 +23,12 @@ func TestTruncateToolResult(t *testing.T) {
 	}
 	// 切り詰めた事実がLLMに伝わることが重要。
 	if !strings.Contains(got, "切り詰め") {
-		t.Errorf("切り詰めの告知がない: %q", got)
+		t.Errorf("切り詰めの報告がない: %q", got)
 	}
 }
 
 // バイト単位で切ると日本語がちょうど切れ目で壊れる。
-// 「10文字で切り詰めた」と告知しながら壊れたバイト列を送るのは、
+// 「10文字で切り詰めた」と報告しながら壊れたバイト列を送るのは、
 // LLMにとってもユーザーにとっても嘘になる。
 func TestTruncateToolResultKeepsUTF8Intact(t *testing.T) {
 	m := &Manager{MaxToolResultChars: 10}
@@ -43,7 +43,7 @@ func TestTruncateToolResultKeepsUTF8Intact(t *testing.T) {
 	if !utf8.ValidString(got) {
 		t.Errorf("UTF-8が壊れている: %q", got)
 	}
-	// 告知に含める「全体の長さ」も文字数であること。
+	// 報告に含める「全体の長さ」も文字数であること。
 	// バイト数で数えると 90 になる(1文字3バイト × 30文字)。
 	if !strings.Contains(got, "30") || strings.Contains(got, "90") {
 		t.Errorf("全体の文字数(30)がバイト数(90)になっている: %q", got)

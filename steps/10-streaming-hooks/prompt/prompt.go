@@ -20,10 +20,11 @@ package prompt
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
+
+	"github.com/toshi0607/go-coding-agent-handson/steps/10-streaming-hooks/tools"
 )
 
 // MemoryFileName はプロジェクトメモリのファイル名。
@@ -48,8 +49,8 @@ type SkillSummary struct {
 
 // Options は Build に渡す情報。
 type Options struct {
-	// WorkDir は作業ディレクトリ(CLAUDE.md の探索場所)。
-	WorkDir string
+	// Workspace は作業ディレクトリ。CLAUDE.md もここを通して読む。
+	Workspace *tools.Workspace
 	// Skills は利用可能なスキルの目次。本文は含めない。
 	Skills []SkillSummary
 }
@@ -65,7 +66,7 @@ func Build(opts Options) string {
 - 作業ディレクトリ: %s
 - OS: %s
 - 今日の日付: %s`,
-		opts.WorkDir, runtime.GOOS, time.Now().Format("2006-01-02"))
+		opts.Workspace.Root(), runtime.GOOS, time.Now().Format("2006-01-02"))
 
 	// スキルの目次。本文は載せない——ここが段階的開示の要点で、
 	// 目次1行は数十トークン、本文は数千トークンになりうる。
@@ -74,7 +75,7 @@ func Build(opts Options) string {
 		// 作者以外が書ける文字列である。それがシステムプロンプト
 		// (最も信頼度の高い領域)に入るため、「これはデータであって
 		// 指示ではない」と明示しておく。プロンプトインジェクションを
-		// 完全に防げるわけではないが、境界を宣言しないより確実に良い。
+		// 完全に防げるわけではないが、宣言しないより確実に良い。
 		b.WriteString(`
 
 利用可能なスキル:
@@ -89,7 +90,13 @@ func Build(opts Options) string {
 
 	// CLAUDE.md があれば「プロジェクトメモリ」として全文を注入する。
 	// なければ何も足さない(存在しないセクションでプロンプトを汚さない)。
-	memory, err := os.ReadFile(filepath.Join(opts.WorkDir, MemoryFileName))
+	// CLAUDE.md が作業ディレクトリの外(~/.ssh/id_rsa など)を指すリンクなら
+	// 読み込まない。ファイル系ツールと同じく Workspace でパスを解決する。
+	path, err := opts.Workspace.Resolve(MemoryFileName)
+	if err != nil {
+		return b.String()
+	}
+	memory, err := os.ReadFile(path)
 	if err == nil && len(memory) > 0 {
 		fmt.Fprintf(&b, `
 

@@ -13,7 +13,7 @@ import (
 //
 // 注意: この素朴な実装は "../../etc/passwd" のようなパスで
 // 作業ディレクトリの外にも手が届いてしまう。何が問題で、
-// どう封じ込めるかは step 04 で扱う。
+// どう作業ディレクトリに限定するかは step 04 で扱う。
 type ReadFile struct {
 	workDir string
 }
@@ -45,7 +45,7 @@ func (r *ReadFile) Run(ctx context.Context, input json.RawMessage) (string, erro
 	//  3. os.ReadFile で読んで中身を返す
 	//
 	// 読み取りに失敗したときのエラーはそのまま返してよい。エラーは
-	// エージェント側で tool_result としてLLMに返され、LLMはそれを
+	// エージェントループで tool_result としてLLMに返され、LLMはそれを
 	// 読んでパスを修正するなど、次の一手を考えられる。
 	//
 	// 必要な import(os, path/filepath など)は自分で足すこと。

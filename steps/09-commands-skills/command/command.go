@@ -9,7 +9,7 @@
 //     中身が展開されて、通常のユーザー入力としてLLMに送られる
 //
 // 「LLMに渡る前に展開されるだけ」という点が肝で、コマンドと言っても
-// エージェント側に新しい能力が生えるわけではない。ただし定型作業を
+// ミニClaude Codeに新しい機能が増えるわけではない。ただし定型作業を
 // 1語で呼び出せることの実用価値は大きい。
 package command
 
@@ -70,9 +70,9 @@ func New(ws *tools.Workspace) *Registry {
 //
 //	/Users/foo/main.go を読んで
 //
-// のように、絶対パスから始まる依頼を書くことがある。これをコマンド
-// 扱いすると「コマンド /Users/foo/main.go は存在しません」と言われて
-// 依頼がLLMに届かない。コマンド名として妥当な形かどうかまで見る。
+// のように、絶対パスから始まる依頼を書くことがある。これをスラッシュ
+// コマンドとして扱うと「スラッシュコマンド /Users/foo/main.go は存在しません」
+// と表示されて依頼がLLMに届かない。名前として妥当かどうかまで見る。
 func (r *Registry) IsCommand(line string) bool {
 	line = strings.TrimSpace(line)
 	if !strings.HasPrefix(line, "/") {
@@ -92,12 +92,12 @@ func (r *Registry) IsCommand(line string) bool {
 //
 // もう1つの罠は「/ で始まる入力は全部コマンド」という判定である。
 // ユーザーは「/Users/foo/main.go を読んで」のように絶対パスから始まる
-// 依頼を普通に書く。これをコマンド扱いすると「コマンド /Users/foo/main.go は
-// 存在しません」と言われ、依頼がLLMに届かない。
+// 依頼を普通に書く。これをスラッシュコマンドとして扱うと「スラッシュコマンド
+// /Users/foo/main.go は存在しません」と表示され、依頼がLLMに届かない。
 //
 // 対策はどちらも同じで、「危険な文字を弾く」のではなく「コマンド名として
-// 安全な文字(英数字と - _)だけを通す」。ファイル操作の封じ込め
-// (tools.Workspace)や bash の isSimpleCommand と同じ考え方である。
+// 安全な文字(英数字と - _)だけを通す」。ファイル操作の範囲を作業ディレクトリに
+// 限定する tools.Workspace や bash の isSimpleCommand と同じ考え方である。
 // 空文字も false にすること。
 //
 // なお、この検証だけでは足りない。コマンドファイル自身がシンボリック
@@ -127,18 +127,18 @@ func (r *Registry) Execute(line string) Result {
 	// 安全であるようにここでも検証する。パスを組み立てる直前が、
 	// 検証を置くべき場所である。
 	if !isValidName(name) {
-		return Result{Output: fmt.Sprintf("コマンド名として使えない文字が含まれています: /%s", name)}
+		return Result{Output: fmt.Sprintf("スラッシュコマンドの名前に使えない文字が含まれています: /%s", name)}
 	}
 
 	// 組み込みになければカスタムコマンドを探す。
 	// パスは必ず Workspace 経由で解決する(上の ws のコメントを参照)。
 	path, err := r.ws.Resolve(filepath.Join(CommandsDir, name+".md"))
 	if err != nil {
-		return Result{Output: fmt.Sprintf("コマンド /%s は読み込めません: %v", name, err)}
+		return Result{Output: fmt.Sprintf("スラッシュコマンド /%s は読み込めません: %v", name, err)}
 	}
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return Result{Output: fmt.Sprintf("コマンド /%s は存在しません。/help で一覧を確認できます。", name)}
+		return Result{Output: fmt.Sprintf("スラッシュコマンド /%s は存在しません。/help で一覧を確認できます。", name)}
 	}
 	// $ARGUMENTS をコマンドの引数部分で置き換えてプロンプトにする。
 	prompt := strings.ReplaceAll(string(content), argumentsPlaceholder, strings.TrimSpace(args))
@@ -147,13 +147,13 @@ func (r *Registry) Execute(line string) Result {
 
 func (r *Registry) helpText() string {
 	var b strings.Builder
-	b.WriteString(`組み込みコマンド:
+	b.WriteString(`組み込みのスラッシュコマンド:
   /help     このヘルプを表示
   /clear    会話履歴をクリア
   /compact  会話履歴を要約して圧縮`)
 
 	if custom := r.customCommandNames(); len(custom) > 0 {
-		b.WriteString("\n\nカスタムコマンド(" + CommandsDir + "/):")
+		b.WriteString("\n\nカスタムスラッシュコマンド(" + CommandsDir + "/):")
 		for _, name := range custom {
 			b.WriteString("\n  /" + name)
 		}

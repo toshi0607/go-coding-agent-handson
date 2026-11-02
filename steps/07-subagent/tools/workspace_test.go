@@ -43,7 +43,7 @@ func TestResolveAllowsPathsInsideWorkspace(t *testing.T) {
 	}
 }
 
-// 封じ込めの本体。ここが1つでも漏れると、read_file 経由で
+// 作業ディレクトリへの限定の本体。ここが1つでも漏れると、read_file 経由で
 // ~/.ssh/id_rsa や .env が読めてしまう。
 func TestResolveRejectsEscapes(t *testing.T) {
 	ws, _ := newTestWorkspace(t)
@@ -214,7 +214,7 @@ func TestResolveRejectsSiblingWithSharedPrefix(t *testing.T) {
 	}
 }
 
-// ツール経由でも封じ込めが効いていることの確認。
+// ツール経由でも作業ディレクトリへの限定が効いていることの確認。
 // Workspace 単体が正しくても、ツールが Resolve を呼び忘れていたら意味がない。
 func TestToolsAreContained(t *testing.T) {
 	ws, dir := newTestWorkspace(t)
@@ -248,7 +248,7 @@ func TestToolsAreContained(t *testing.T) {
 		}
 	})
 
-	// 内側は普通に使えること(封じ込めが厳しすぎて使えないのも困る)。
+	// 内側は普通に使えること(作業ディレクトリへの限定が厳しすぎて使えないのも困る)。
 	t.Run("内側は許可", func(t *testing.T) {
 		must(t, os.WriteFile(filepath.Join(dir, "ok.txt"), []byte("中身"), 0o644))
 		input, _ := jsonObject("path", "ok.txt")
@@ -263,7 +263,7 @@ func TestToolsAreContained(t *testing.T) {
 }
 
 // bash は作業ディレクトリで実行される。
-// ただしパス封じ込めは効かない(コマンド文字列は検証できない)ため、
+// ただし作業ディレクトリへの限定は効かない(コマンド文字列は検証できない)ため、
 // bash の防御は承認フローが担う——という設計を明示するテスト。
 func TestBashRunsInWorkspace(t *testing.T) {
 	ws, dir := newTestWorkspace(t)

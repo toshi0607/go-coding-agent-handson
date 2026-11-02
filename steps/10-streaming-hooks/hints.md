@@ -48,10 +48,10 @@ stderr, exitCode, err := r.run(ctx, h.Command, p)
 
 ### ヒント2
 
-- `err != nil` → 「フックを実行できなかったため安全側に倒して中止」の趣旨でエラーを返す(fail-closed)
+- `err != nil` → 「PreToolUseフックを実行できなかったため、ツールを実行しませんでした」の趣旨でエラーを返す(fail-closed)
 - `exitCode == 0` → 何もしない(次のフックのループへ)
 - `exitCode == blockExitCode` → `bytes.TrimSpace(stderr)` を理由に含めてエラーを返す。この文字列が is_error 付き tool_result としてLLMに渡り、LLMは別の方法を検討できる
-- それ以外 → 「予期しない終了コード(契約は 0=許可 / 2=ブロック)。判定できないため中止」の趣旨でブロック
+- それ以外 → 「予期しない終了コード(0は許可、2はブロック)。判定できないため、ツールを実行しませんでした」の趣旨でブロック
 
 Goの `switch { case ...: }` で書くと4分岐が上から読める形になります。`fmt` の import を忘れずに。
 

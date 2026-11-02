@@ -1,8 +1,8 @@
 // go-coding-agent-handson の完成形ミニコーディングエージェント。
 //
-// ここ(main)の仕事は「組み立て」である。各パッケージが提供する部品
-// (LLMクライアント、ツール、権限、hooks、コンテキスト管理)を配線して
-// エージェントを作り、REPLに渡す。どの部品に何を渡しているかを追うと、
+// ここ(main)の仕事は「組み立て」である。各パッケージが提供するパーツ
+// (LLMクライアント、ツール、権限、hooks、コンテキスト管理)をつなぎ合わせて
+// エージェントを作り、REPLに渡す。どのパーツに何を渡しているかを追うと、
 // エージェント全体の構造が見える。
 //
 // 使い方:
@@ -72,17 +72,16 @@ func run(oneShot string) error {
 	stdin := bufio.NewReader(os.Stdin)
 	asker := makeAsker(stdin, "[y]es / [n]o / [a]lways")
 
-	// --- ファイル操作の封じ込め ---
+	// --- ファイル操作の範囲を作業ディレクトリに限定する ---
 	// ファイル系ツールはこの Workspace 経由でしかパスを解決できない。
-	// LLMが渡してきたパスを直接OSに投げないための境界である。
+	// LLMが渡してきたパスを直接OSに渡さないためのしくみである。
 	ws, err := tools.NewWorkspace(workDir)
 	if err != nil {
 		return err
 	}
-	// 以降は解決済みの絶対パス(ws.Root())を使う。os.Getwd() の値を
-	// そのまま使い回すと、macOSで /tmp が /private/tmp のリンクである
-	// ために「システムプロンプトに書かれた作業ディレクトリ」と
-	// 「実際の封じ込め境界」が食い違う。
+	// 以降の表示には解決済みの絶対パス(ws.Root())を使う。os.Getwd() の値は、
+	// macOSで /tmp が /private/tmp のリンクであるために、ファイル系ツールと
+	// システムプロンプトが使う作業ディレクトリと食い違うことがある。
 	workDir = ws.Root()
 
 	// --- 設定ファイルの信頼確認 ---
@@ -94,7 +93,7 @@ func run(oneShot string) error {
 	}
 
 	// --- ツールの組み立て ---
-	// 組み込みツール + スキル + MCPツール + Taskツール(サブエージェント)。
+	// 組み込みツール + スキル + MCPツール + taskツール(サブエージェント)。
 	baseTools := []tools.Tool{
 		tools.NewReadFile(ws),
 		tools.NewListFiles(ws),
@@ -102,7 +101,7 @@ func run(oneShot string) error {
 		tools.NewBash(ws),
 	}
 
-	// スキルもファイルを読む機能なので、封じ込め(ws)を通す。
+	// スキルもファイルを読む機能なので、Workspace(ws)を通す。
 	skills, err := skill.Load(ws, os.Stderr)
 	if err != nil {
 		return err
@@ -122,8 +121,8 @@ func run(oneShot string) error {
 		return permission.New(permission.Config{
 			ToolPolicies: map[string]permission.Policy{
 				// read_file と list_files を無条件許可にできるのは、
-				// Workspace で作業ディレクトリに封じ込めてあるからである。
-				// 封じ込めがなければ「読み取りだから安全」は成り立たない
+				// Workspace で作業ディレクトリの中に限定してあるからである。
+				// 作業ディレクトリへの限定がなければ「読み取りだから安全」は成り立たない
 				// (~/.ssh/id_rsa も .env も読めてしまう)。
 				"read_file":  permission.Allow,
 				"list_files": permission.Allow,
@@ -140,13 +139,13 @@ func run(oneShot string) error {
 	checker := newChecker(asker)
 
 	// サブエージェント用には別の Checker を作る。ポリシーは同じだが、
-	// 質問の出所を明示する点だけが違う。サブエージェントの出力は
+	// 質問の出所を明示する点だけが異なる。サブエージェントの出力は
 	// 画面に出していない(下の Out: io.Discard)ので、承認だけが
 	// 文脈なしに現れると、ユーザーは何に答えているのか分からない。
 	//
 	// 「人に聞けないから自動で拒否する」という選択肢もあるが、それだと
 	// サブエージェントは調査しかできなくなる。誰が要求しているかを
-	// 伝えたうえで人間に判断させる方を採った。
+	// 伝えたうえでユーザーに判断させる方を採った。
 	subChecker := newChecker(func(question string) (string, error) {
 		return asker("(サブエージェントからの要求) " + question)
 	})
@@ -162,15 +161,15 @@ func run(oneShot string) error {
 	for _, s := range skills {
 		skillSummaries = append(skillSummaries, prompt.SkillSummary{Name: s.Name, Description: s.Description})
 	}
-	systemPrompt := prompt.Build(prompt.Options{WorkDir: workDir, Skills: skillSummaries})
+	systemPrompt := prompt.Build(prompt.Options{Workspace: ws, Skills: skillSummaries})
 	hookRunner := hooks.NewRunner(settings.Hooks)
 
 	// --- サブエージェントの組み立て ---
 	// 親と同じツール・hooksを持つが、
-	//   - Taskツールは持たない(再帰の禁止)
+	//   - taskツールは持たない(入れ子を1階層に限る)
 	//   - 出力は捨てる(親の表示を汚さない)
 	//   - 承認の質問に出所を付ける
-	// という3点だけが違う。
+	// という3点だけが異なる。
 	taskTool := agent.NewTaskTool(func() *agent.Agent {
 		return agent.New(agent.Config{
 			Client:       client,
@@ -203,7 +202,7 @@ func run(oneShot string) error {
 		return err
 	}
 	// カスタムコマンドもリポジトリのファイルを読む機能なので、
-	// 封じ込め(ws)を通す。
+	// Workspace(ws)を通す。
 	return repl(ctx, mainAgent, command.New(ws), stdin)
 }
 
@@ -304,6 +303,14 @@ func confirmTrust(workDir string, executables []config.Executable, ask permissio
 // ツール一覧を集める。1つのサーバーへの接続失敗は警告に留め、
 // エージェント全体は起動させる。
 func connectMCPServers(ctx context.Context, cfg config.MCPConfig) ([]tools.Tool, func()) {
+	// AGENT_MCP_LOG を設定すると、MCPサーバーと送受信したJSON-RPCの
+	// メッセージを標準エラー出力に書き出す。SDK に任せたやりとりを
+	// 目で確かめるためのもの。
+	var mcpLog io.Writer
+	if os.Getenv("AGENT_MCP_LOG") != "" {
+		mcpLog = os.Stderr
+	}
+
 	var allTools []tools.Tool
 	var clients []*mcp.Client
 	for _, name := range slices.Sorted(maps.Keys(cfg.MCPServers)) {
@@ -315,6 +322,7 @@ func connectMCPServers(ctx context.Context, cfg config.MCPConfig) ([]tools.Tool,
 			// サーバーのログは捨てずに標準エラー出力へ流す。
 			// MCPサーバーが動かないときの手がかりはここにしかない。
 			Stderr: os.Stderr,
+			Log:    mcpLog,
 		})
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "警告: %v\n", err)
@@ -322,7 +330,7 @@ func connectMCPServers(ctx context.Context, cfg config.MCPConfig) ([]tools.Tool,
 		}
 		serverTools, err := client.Tools(ctx)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "警告: MCPサーバー %s のツール取得に失敗: %v\n", name, err)
+			fmt.Fprintf(os.Stderr, "警告: %v\n", err)
 			_ = client.Close()
 			continue
 		}

@@ -48,7 +48,7 @@ func (e *EditFile) Run(ctx context.Context, input json.RawMessage) (string, erro
 		NewStr string `json:"new_str"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("入力のパースに失敗: %w", err)
+		return "", fmt.Errorf("入力のパースに失敗しました: %w", err)
 	}
 	if in.Path == "" {
 		return "", errors.New("path を指定してください")

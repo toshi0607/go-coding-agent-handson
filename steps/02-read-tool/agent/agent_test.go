@@ -38,7 +38,7 @@ func TestTextOnlyTurn(t *testing.T) {
 	if got != "こんにちは!" {
 		t.Errorf("got %q", got)
 	}
-	// 履歴 = ユーザー入力 + アシスタント応答 の2件。
+	// 履歴 = ユーザー入力 + アシスタントのレスポンス の2件。
 	if len(a.History()) != 2 {
 		t.Errorf("履歴は2件のはず: %d件", len(a.History()))
 	}
@@ -116,19 +116,19 @@ func TestMaxIterationsStopsRunawayLoop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if !strings.Contains(got, "打ち切り") {
-		t.Errorf("上限到達の告知がない: %q", got)
+	if !strings.Contains(got, "上限の") {
+		t.Errorf("上限到達の報告がない: %q", got)
 	}
 	if tool.calls != 2 {
 		t.Errorf("上限2回で止まるはず: %d回", tool.calls)
 	}
 }
 
-// max_tokens で応答が切れると、生成途中の tool_use が履歴に残ることがある。
-// 対応する tool_result を積まないまま次のターンに進むと、以降すべての
+// max_tokens でレスポンスが切れると、生成途中の tool_use が履歴に残ることがある。
+// 対応する tool_result を足さないまま次のターンに進むと、以降すべての
 // リクエストがAPIに拒否されて会話が死ぬ。その回帰テスト。
 func TestInterruptedToolUseIsClosedOut(t *testing.T) {
-	// stop_reason: max_tokens だが tool_use ブロックを含む応答。
+	// stop_reason: max_tokens だが tool_use ブロックを含むレスポンス。
 	interrupted := `{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5-5",
 		"content":[{"type":"text","text":"編集します"},
 		           {"type":"tool_use","id":"toolu_cut","name":"edit_file","input":{}}],
@@ -157,7 +157,7 @@ func TestInterruptedToolUseIsClosedOut(t *testing.T) {
 	}
 }
 
-// stop_reason が tool_use なのに tool_use ブロックがない矛盾応答。
+// stop_reason が tool_use なのに tool_use ブロックがない矛盾したレスポンス。
 // 空のuserメッセージを送らず、上限まで無駄な往復もしないこと。
 func TestToolUseStopReasonWithoutToolBlocks(t *testing.T) {
 	inconsistent := `{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5-5",

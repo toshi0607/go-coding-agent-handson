@@ -19,7 +19,7 @@ const bashTimeout = 60 * time.Second
 // 全部カバーできる万能ツールである一方、エージェントの中で最も危険な
 // ツールでもある(rm -rf も curl | sh も「コマンド」だ)。
 //
-// 重要: bash はパス検証で封じ込められない。
+// 重要: bash はパス検証では作業ディレクトリに限定できない。
 //
 // read_file や edit_file は引数がパスなので、Workspace で検証すれば
 // 作業ディレクトリの外に手が届かないようにできる。しかし bash の引数は
@@ -39,7 +39,7 @@ const bashTimeout = 60 * time.Second
 // ループ側に置けばすべてのツールに漏れなく適用できる。
 type Bash struct {
 	// ws はコマンドの実行ディレクトリを決めるためだけに使う。
-	// 上記のとおり、これは封じ込めではない。
+	// 上記のとおり、これは作業ディレクトリへの限定ではない。
 	ws *Workspace
 }
 
@@ -69,7 +69,7 @@ func (b *Bash) Run(ctx context.Context, input json.RawMessage) (string, error) {
 		Command string `json:"command"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("入力のパースに失敗: %w", err)
+		return "", fmt.Errorf("入力のパースに失敗しました: %w", err)
 	}
 	if in.Command == "" {
 		return "", errors.New("command を指定してください")

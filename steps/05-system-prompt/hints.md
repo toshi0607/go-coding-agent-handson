@@ -6,7 +6,7 @@
 
 ### ヒント1
 
-`b` は `strings.Builder` なので、`fmt.Fprintf(&b, ...)` で追記できます。載せるのは作業ディレクトリ(`opts.WorkDir`)、OS(`runtime.GOOS`)、今日の日付です。「環境情報:」のような見出しを付け、`basePrompt` との間は空行で区切ると読みやすくなります。
+`b` は `strings.Builder` なので、`fmt.Fprintf(&b, ...)` で追記できます。載せるのは作業ディレクトリ(`opts.Workspace.Root()`)、OS(`runtime.GOOS`)、今日の日付です。「環境情報:」のような見出しを付け、`basePrompt` との間は空行で区切ると読みやすくなります。
 
 ### ヒント2
 
@@ -16,7 +16,7 @@
 
 ### ヒント1
 
-`os.ReadFile(filepath.Join(opts.WorkDir, MemoryFileName))` で読みます。エラーのときと中身が空のときは**何もしない**(エラーを返す必要すらありません——CLAUDE.md は任意ファイルです)。
+`opts.Workspace.Resolve(MemoryFileName)` でパスを解決してから、`os.ReadFile` で読みます。`Resolve` がエラーを返したとき(CLAUDE.md が作業ディレクトリの外を指すシンボリックリンクのとき)、読み取りがエラーのとき、中身が空のときは**何もしない**(エラーを返す必要すらありません——CLAUDE.md は任意ファイルです)。`path/filepath` の import は要りません。
 
 ### ヒント2
 

@@ -19,7 +19,7 @@ func TestTextOnlyTurn(t *testing.T) {
 	if got != "こんにちは!" {
 		t.Errorf("got %q", got)
 	}
-	// 履歴 = ユーザー入力 + アシスタント応答 の2件。
+	// 履歴 = ユーザー入力 + アシスタントのレスポンス の2件。
 	if len(a.History()) != 2 {
 		t.Errorf("履歴は2件のはず: %d件", len(a.History()))
 	}
@@ -28,9 +28,9 @@ func TestTextOnlyTurn(t *testing.T) {
 // 会話が「続く」ことの検証。
 //
 // Messages APIはステートレスなので、2ターン目のリクエストに
-// 1ターン目のユーザー入力とアシスタント応答を含めるのは
-// エージェント側の責務である。どちらかを積み忘れると、LLMは
-// 会話の途中経過を知らないまま応答することになる。
+// 1ターン目のユーザー入力とアシスタントのレスポンスを含めるのは
+// エージェント側の責務である。どちらかを足し忘れると、LLMは
+// 会話の途中経過を知らないままレスポンスを返すことになる。
 func TestHistoryCarriesAcrossTurns(t *testing.T) {
 	client := llm.NewReplayClient(
 		llm.TextResponse("こんにちは、Gopherさん!"),

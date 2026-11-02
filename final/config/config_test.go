@@ -89,7 +89,7 @@ func TestExecutables(t *testing.T) {
 	for i := range 5 {
 		again := Executables(settings, mcpCfg)
 		if !slices.Equal(again, list) {
-			t.Fatalf("%d回目の順序が違う: %+v", i, again)
+			t.Fatalf("%d回目の順序が異なる: %+v", i, again)
 		}
 	}
 }

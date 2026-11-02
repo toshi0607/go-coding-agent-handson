@@ -251,7 +251,7 @@ func typeName(expr ast.Expr) string {
 
 // mask は指定範囲を1行の目印に潰す。
 //
-// 元の行数は保たない。穴やimportは両側で長さが違う(穴の説明コメントの分だけ
+// 元の行数は保たない。穴やimportは両側で長さが異なる(穴の説明コメントの分だけ
 // step側が長い、穴で不要になったimportがfinal側だけにある)ため、行数を
 // 保つと以降の行が丸ごとずれて、無関係な差分の山になる。
 func mask(src string, spans []span) string {

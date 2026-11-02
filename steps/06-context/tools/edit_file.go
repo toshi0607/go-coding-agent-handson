@@ -22,7 +22,7 @@ type EditFile struct {
 	ws *Workspace
 }
 
-// NewEditFile は作業ディレクトリに封じ込められた edit_file を作る。
+// NewEditFile は作業ディレクトリの中に限定された edit_file を作る。
 func NewEditFile(ws *Workspace) *EditFile { return &EditFile{ws: ws} }
 
 func (*EditFile) Name() string { return "edit_file" }
@@ -52,7 +52,7 @@ func (e *EditFile) Run(ctx context.Context, input json.RawMessage) (string, erro
 		NewStr string `json:"new_str"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("入力のパースに失敗: %w", err)
+		return "", fmt.Errorf("入力のパースに失敗しました: %w", err)
 	}
 	if in.Path == "" {
 		return "", errors.New("path を指定してください")

@@ -19,7 +19,7 @@ type ReadFile struct {
 	ws *Workspace
 }
 
-// NewReadFile は作業ディレクトリに封じ込められた read_file を作る。
+// NewReadFile は作業ディレクトリの中に限定された read_file を作る。
 func NewReadFile(ws *Workspace) *ReadFile { return &ReadFile{ws: ws} }
 
 func (*ReadFile) Name() string { return "read_file" }
@@ -42,7 +42,7 @@ func (r *ReadFile) Run(ctx context.Context, input json.RawMessage) (string, erro
 		Path string `json:"path"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
-		return "", fmt.Errorf("入力のパースに失敗: %w", err)
+		return "", fmt.Errorf("入力のパースに失敗しました: %w", err)
 	}
 	path, err := r.ws.Resolve(in.Path)
 	if err != nil {

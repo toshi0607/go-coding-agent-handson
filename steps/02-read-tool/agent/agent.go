@@ -2,11 +2,11 @@
 //
 // エージェントの正体は次のループである:
 //
-//	ユーザー入力 → LLM呼び出し → (ツール実行 → 結果を返してLLM再呼び出し)* → 応答
+//	ユーザー入力 → LLM呼び出し → (ツール実行 → 結果を返してLLM再呼び出し)* → レスポンス
 //
 // LLMは「次にどのツールを使うか」を決めるだけで、実際に手を動かす
 // (ファイルを読む、コマンドを実行する)のはこちら側のコードである。
-// この役割分担と、その間を往復するメッセージの積み方さえ理解すれば、
+// この役割分担と、その間を往復するメッセージの足し方さえ理解すれば、
 // コーディングエージェントの骨格は理解できたことになる。
 package agent
 
@@ -23,18 +23,18 @@ import (
 
 const (
 	// maxTokensPerTurn は1回のLLM呼び出しの出力上限。
-	// 既定のモデルは常に思考(thinking)し、その分もこの上限に数えられるので、
-	// 見える応答の長さだけで決めると足りなくなる。一方、ストリーミングしない
+	// デフォルトのモデルは常に思考(thinking)し、その分もこの上限に数えられるので、
+	// 見えるレスポンスの長さだけで決めると足りなくなる。一方、ストリーミングしない
 	// 呼び出しでもHTTPタイムアウトに収まるよう、大きくしすぎてもいない。
 	maxTokensPerTurn = 16000
 
 	// maxDisplayRunes はツール実行を画面に表示するときの引数の文字数上限。
 	maxDisplayRunes = 120
 
-	// defaultMaxIterations は1ユーザーターン内のLLM往復回数の上限。
+	// defaultMaxIterations は1ターンでLLMを呼ぶ回数の上限。
 	// LLMがツールを呼び続ける限りループは回るので、暴走(同じ失敗を
 	// 延々と繰り返す等)への保険として上限を置く。上限に達したら
-	// 打ち切ってユーザーに制御を返す。
+	// ターンを終えてユーザーに制御を返す。
 	defaultMaxIterations = 25
 )
 
@@ -44,9 +44,9 @@ type Config struct {
 	Model  anthropic.Model
 	// Tools はこのエージェントが使えるツール。
 	Tools []tools.Tool
-	// Out は途中経過(応答テキスト、ツール実行表示)の出力先。
+	// Out は途中経過(レスポンスのテキスト、ツール実行表示)の出力先。
 	Out io.Writer
-	// MaxIterations は1ターン内のLLM往復上限(0ならデフォルト)。
+	// MaxIterations は1ターンでLLMを呼ぶ回数の上限(0ならデフォルト)。
 	MaxIterations int
 }
 
@@ -90,41 +90,41 @@ func New(cfg Config) *Agent {
 }
 
 // Run は1ユーザーターンを処理する。ツール実行を挟みながらLLMとの
-// 往復を繰り返し、最終的なテキスト応答を返す。
+// 往復を繰り返し、最終的なテキストのレスポンスを返す。
 func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 	a.history = append(a.history, anthropic.NewUserMessage(anthropic.NewTextBlock(userInput)))
 
 	// エージェントループ本体。
-	// 「LLMがツールを使い終わって、テキストだけの応答を返してくるまで」
+	// 「LLMがツールを使い終わって、テキストだけのレスポンスを返してくるまで」
 	// が1ユーザーターン。
 	for range a.maxIterations {
 		resp, err := a.client.Complete(ctx, a.buildParams())
 		if err != nil {
-			return "", fmt.Errorf("LLM呼び出しに失敗: %w", err)
+			return "", fmt.Errorf("LLMの呼び出しに失敗しました: %w", err)
 		}
 		fmt.Fprintln(a.out, textOf(resp))
 
-		// アシスタントの応答は tool_use ブロックも含めて丸ごと履歴に積む。
+		// アシスタントのレスポンスは tool_use ブロックも含めて丸ごと履歴に足す。
 		// tool_use を欠いた履歴に tool_result だけ足すとAPIに拒否される。
 		a.history = append(a.history, resp.ToParam())
 
 		// TODO(step02-2): ここがエージェントループの心臓部である。
 		// 「ループを続けるか終えるか」を判定し、続けるならツールを
-		// 実行して結果を履歴に積む。満たすべき仕様:
+		// 実行して結果を履歴に足す。満たすべき仕様:
 		//
-		//  1. 応答に含まれる tool_use ブロックをすべて実行し
+		//  1. レスポンスに含まれる tool_use ブロックをすべて実行し
 		//     (toolUseBlocks と a.executeTool が使える)、その結果を
-		//     「1つの user メッセージ」にまとめて履歴に積み、ループを続ける。
-		//     LLMは1回の応答で複数のツールを呼ぶことがあり(並列ツール
+		//     「1つの user メッセージ」にまとめて履歴に足し、ループを続ける。
+		//     LLMは1回のレスポンスで複数のツールを呼ぶことがあり(並列ツール
 		//     呼び出し)、その場合も tool_result は全部まとめて
 		//     1メッセージで返すのが作法である
-		//  2. ターンの終わり(ツールを使わない応答)なら textOf(resp) を
+		//  2. ターンの終わり(ツールを使わないレスポンス)なら textOf(resp) を
 		//     返してループを抜ける
 		//  3. 「stop_reason == tool_use かどうか」だけで判定してはいけない。
 		//     README の「ループの終了条件」の節を読み、
-		//     - max_tokens で打ち切られた応答に tool_use が残っているケース
+		//     - max_tokens で打ち切られたレスポンスに tool_use が残っているケース
 		//     - stop_reason が tool_use なのに tool_use ブロックが無いケース
-		//     をどう扱うべきか考えること。検証テストはこの2つを
+		//     をどう扱うべきか考えること。テストはこの2つを
 		//     ピンポイントで突いてくる
 		//
 		// 使える道具: toolUseBlocks(resp) / a.executeTool(ctx, block) /
@@ -134,7 +134,7 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 		panic("TODO(step02-2): steps/02-read-tool/agent/agent.go のループを完成させてください(hints.md 参照)")
 	}
 
-	msg := fmt.Sprintf("(%d回の往復上限に達したため打ち切りました)", a.maxIterations)
+	msg := fmt.Sprintf("(LLMの呼び出しが上限の%d回に達したため、ターンを終了しました)", a.maxIterations)
 	fmt.Fprintln(a.out, msg)
 	return msg, nil
 }
@@ -158,12 +158,13 @@ func (a *Agent) executeTool(ctx context.Context, block anthropic.ContentBlockUni
 		return anthropic.NewToolResultBlock(block.ID, err.Error(), true)
 	}
 
-	// 空文字のツール結果は tool_result に空のテキストブロックを作り、
-	// APIに拒否される。空ファイルを読んだ、出力のないコマンドを実行した、
-	// といった正常なケースでも起こるので、ここで必ず埋める。
+	// 空文字のツール結果は、空のままでも Messages API は受け付けるが、
+	// ツールが成功して出力が無かったことをLLMが文として読み取れるように、
+	// 文字列に置き換える。空ファイルを読んだ、出力のないコマンドを実行した、
+	// といった正常なケースで起こる。
 	// 個々のツールに任せず1箇所で処理するのは、権限チェックと同じ理由。
 	if result == "" {
-		result = "(空の結果)"
+		result = "(出力は空です)"
 	}
 
 	return anthropic.NewToolResultBlock(block.ID, result, false)

@@ -12,6 +12,8 @@ package prompt
 
 import (
 	"strings"
+
+	"github.com/toshi0607/go-coding-agent-handson/steps/05-system-prompt/tools"
 )
 
 // MemoryFileName はプロジェクトメモリのファイル名。
@@ -28,8 +30,8 @@ const basePrompt = `あなたはターミナルで動くコーディングエー
 
 // Options は Build に渡す情報。
 type Options struct {
-	// WorkDir は作業ディレクトリ(CLAUDE.md の探索場所)。
-	WorkDir string
+	// Workspace は作業ディレクトリ。CLAUDE.md もここを通して読む。
+	Workspace *tools.Workspace
 }
 
 // Build はシステムプロンプトを組み立てる。
@@ -39,7 +41,7 @@ func Build(opts Options) string {
 
 	// TODO(step05-1): 環境情報を追記する。
 	//
-	// LLMは実行環境を何も知らない。作業ディレクトリ(opts.WorkDir)、
+	// LLMは実行環境を何も知らない。作業ディレクトリ(opts.Workspace.Root())、
 	// OS(runtime.GOOS)、今日の日付(time.Now())あたりを教えて
 	// おかないと、「あなたの環境によります」のような答えしか返せないし、
 	// ツールに渡すパスの推測も外れやすくなる。
@@ -49,16 +51,19 @@ func Build(opts Options) string {
 
 	// TODO(step05-2): プロジェクトメモリ(CLAUDE.md)を注入する。
 	//
-	// opts.WorkDir 直下の CLAUDE.md(MemoryFileName 定数)を読み、
+	// 作業ディレクトリ直下の CLAUDE.md(MemoryFileName 定数)を読み、
 	// 存在して中身があれば「プロジェクトメモリ」として全文を追記する。
+	// パスは opts.Workspace.Resolve で解決してから os.ReadFile で読む。
+	// CLAUDE.md が作業ディレクトリの外を指すシンボリックリンクのとき、
+	// Resolve はエラーを返す。そのときも何も足さない。
 	// このとき、これが何のセクションで、どう扱うべきものかの説明も
 	// 添えること(ただのテキスト片を貼るだけでは、LLMはそれが
 	// 「従うべき規約」だと分からない)。
 	//
 	// ファイルが無い・読めない場合は何も足さない。存在しない
-	// セクションの見出しだけ残すような形でプロンプトを汚さないこと。
+	// セクションの見出しだけを残してプロンプトを汚さないこと。
 	//
-	// 必要な import(fmt, os, path/filepath, runtime, time)は自分で足すこと。
+	// 必要な import(fmt, os, runtime, time)は自分で足すこと。
 
 	return b.String()
 }
