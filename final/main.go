@@ -231,7 +231,7 @@ func repl(ctx context.Context, a *agent.Agent, commands *command.Registry, stdin
 				a.ClearHistory()
 			}
 			if result.Compact {
-				if err := a.CompactHistory(ctx); err != nil {
+				if err := a.Compact(ctx); err != nil {
 					fmt.Println("エラー:", err)
 					continue
 				}

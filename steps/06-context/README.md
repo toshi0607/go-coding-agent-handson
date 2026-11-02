@@ -6,7 +6,7 @@
 2. 上限に達しなくても、入力トークン分の課金が毎ターン膨らむ
 3. 長すぎるコンテキストは応答品質そのものを下げる
 
-対策は2本柱です。**入れる量を減らす**(ツール結果の切り詰め)と、**積んだものを圧縮する**(compaction = 履歴の要約)。このstepでは [contextmgr](contextmgr/) パッケージとしてこの2つを実装します。
+対策は2本柱です。**入れる量を減らす**(ツール結果の切り詰め)と、**積んだものを圧縮する**(compaction = 履歴の要約)。このstepではこの2つを [agent](agent/) パッケージに足します。どちらもエージェントループの中で使うので、ループと同じパッケージに置きます(Crushも要約を agent パッケージのメソッドにしています)。
 
 ## この章で学ぶこと
 
@@ -19,8 +19,9 @@
 
 step 05の解答(プロンプト組み立て)は埋まった状態で始まります。今回増えたのは:
 
-- [contextmgr/contextmgr.go](contextmgr/contextmgr.go) — 管理本体(課題)
-- [agent/agent.go](agent/agent.go) — `lastUsageTokens` の記録、`executeTool` での切り詰め呼び出し、`CompactHistory`(実装済み)と自動発動(課題)
+- [agent/truncate.go](agent/truncate.go) — ツール結果の切り詰め(課題)
+- [agent/compact.go](agent/compact.go) — compactionの判定 `shouldCompact` と要約 `Compact`(実装済み)
+- [agent/agent.go](agent/agent.go) — `Config` の `CompactThreshold`・`MaxToolResultChars`、`lastUsageTokens` の記録、`executeTool` での切り詰め呼び出し、自動発動(課題)
 
 ## トークンはAPIに数えてもらう
 
@@ -42,7 +43,7 @@ compaction の発動判定にはトークン数が要ります。自前で数え
 
 ## compaction: 要約もまたLLM呼び出しである
 
-圧縮のやり方はシンプルです。履歴の最後に「ここまでの会話を要約して」という依頼を足してLLMに投げ、返ってきた要約だけを新しい履歴にする。[contextmgr/contextmgr.go](contextmgr/contextmgr.go) の `Compact`(実装済み)を読んでください。地味に重要な判断が2つ埋まっています。
+圧縮のやり方はシンプルです。履歴の最後に「ここまでの会話を要約して」という依頼を足してLLMに投げ、返ってきた要約だけを新しい履歴にする。[agent/compact.go](agent/compact.go) の `Compact`(実装済み)を読んでください。地味に重要な判断が2つ埋まっています。
 
 - 要約リクエストは**通常のターンと同じ形**(system・tools付き)で送ります。履歴に tool_use が含まれるとき、tools を伴わないリクエストはAPIに拒否されるからです。ただし tools を渡すとLLMがツール呼び出しで応えかねないので、`tool_choice: none` でテキストを強制します
 - 要約は非可逆圧縮です。一度失った詳細は戻りません
@@ -51,10 +52,10 @@ compaction の発動判定にはトークン数が要ります。自前で数え
 
 ## 課題
 
-1. **TODO(step06-1)** [contextmgr/contextmgr.go](contextmgr/contextmgr.go) — `TruncateToolResult` と `truncateRunes`(切り詰め戦略とルーン境界)
+1. **TODO(step06-1)** [agent/truncate.go](agent/truncate.go) — `truncateToolResult` と `truncateRunes`(切り詰め戦略とルーン境界)
 2. **TODO(step06-2)** [agent/agent.go](agent/agent.go) — 自動compactionの発動(発動そのものより「位置」が問われています)
 
-課題1を先に埋めてください。`executeTool` が `TruncateToolResult` を呼ぶため、課題1が未実装のうちは agent のテストも軒並み失敗します。
+課題1を先に埋めてください。`executeTool` が `truncateToolResult` を呼ぶため、課題1が未実装のうちはツールを使うテストが panic し、agent パッケージの残りのテストも実行されません。
 
 ## 検証
 
@@ -72,7 +73,7 @@ cd example
 go run ../steps/06-context
 ```
 
-大きめのファイルを読ませると、ツール結果の末尾に切り詰めの報告が付くのが見えます。自動compactionを目視するには閾値(`DefaultCompactThreshold`)を一時的に下げて長めに会話してみてください。
+大きめのファイルを読ませると、ツール結果の末尾に切り詰めの報告が付くのが見えます。自動compactionを目視するには、`main.go` の `agent.Config` に `CompactThreshold: 2000` のような小さい閾値を一時的に足して、長めに会話してみてください。
 
 ## 次のstepへ
 
