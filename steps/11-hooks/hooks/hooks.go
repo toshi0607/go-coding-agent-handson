@@ -22,8 +22,8 @@ import (
 	"time"
 )
 
-// hookTimeout は1つのhookコマンドの実行時間上限。
-const hookTimeout = 10 * time.Second
+// hookTimeout は1つのhookコマンドの実行時間上限。Claude Code の command hook のデフォルト(600秒)に合わせた。
+const hookTimeout = 600 * time.Second
 
 // blockExitCode はPreToolUseでツール実行をブロックする終了コード。
 const blockExitCode = 2
