@@ -33,10 +33,10 @@ const (
 	// maxDisplayRunes はツール実行を画面に表示するときの引数の文字数上限。
 	maxDisplayRunes = 120
 
-	// defaultMaxIterations は1ユーザーターン内のLLM往復回数の上限。
+	// defaultMaxIterations は1ターンでLLMを呼ぶ回数の上限。
 	// LLMがツールを呼び続ける限りループは回るので、暴走(同じ失敗を
 	// 延々と繰り返す等)への保険として上限を置く。上限に達したら
-	// 打ち切ってユーザーに制御を返す。
+	// ターンを終えてユーザーに制御を返す。
 	defaultMaxIterations = 25
 )
 
@@ -54,7 +54,7 @@ type Config struct {
 	ContextManager *contextmgr.Manager
 	// Out は途中経過(ストリーミングテキスト、ツール実行表示)の出力先。
 	Out io.Writer
-	// MaxIterations は1ターン内のLLM往復上限(0ならデフォルト)。
+	// MaxIterations は1ターンでLLMを呼ぶ回数の上限(0ならデフォルト)。
 	MaxIterations int
 }
 
@@ -173,7 +173,7 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 				a.history = append(a.history, anthropic.NewUserMessage(results...))
 			}
 			if resp.StopReason == anthropic.StopReasonMaxTokens {
-				fmt.Fprintln(a.out, "(出力が長すぎて途中で打ち切られました)")
+				fmt.Fprintln(a.out, "(出力がmax_tokensの上限に達したため、レスポンスが途中で終わっています)")
 			}
 			return textOf(resp), nil
 		}
@@ -195,7 +195,7 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 		a.history = append(a.history, anthropic.NewUserMessage(results...))
 	}
 
-	msg := fmt.Sprintf("(%d回の往復上限に達したため打ち切りました)", a.maxIterations)
+	msg := fmt.Sprintf("(LLMの呼び出しが上限の%d回に達したため、ターンを終了しました)", a.maxIterations)
 	fmt.Fprintln(a.out, msg)
 	return msg, nil
 }
@@ -235,7 +235,7 @@ func (a *Agent) executeTool(ctx context.Context, block anthropic.ContentBlockUni
 	// といった正常なケースで起こる。
 	// 個々のツールに任せず1箇所で処理するのは、権限チェックと同じ理由。
 	if result == "" {
-		result = "(空の結果)"
+		result = "(出力は空です)"
 	}
 
 	result = a.ctxmgr.TruncateToolResult(result)

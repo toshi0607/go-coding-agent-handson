@@ -116,7 +116,7 @@ func TestMaxIterationsStopsRunawayLoop(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if !strings.Contains(got, "打ち切り") {
+	if !strings.Contains(got, "上限の") {
 		t.Errorf("上限到達の報告がない: %q", got)
 	}
 	if tool.calls != 2 {
