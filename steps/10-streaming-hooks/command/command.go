@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -64,6 +65,13 @@ func New(ws *tools.Workspace) *Registry {
 	return &Registry{ws: ws}
 }
 
+// validName はコマンド名として許可する形。英数字と - _ だけの1文字以上の文字列。
+//
+// Go の regexp は RE2 方式で、照合は入力の長さに比例する時間で終わる
+// (バックトラックで時間が爆発しない)ので、この判定に使ってよい。
+// コンパイルはパッケージ初期化時の1回だけにする。
+var validName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
 // isValidName はコマンド名として許可する形を定める。
 //
 // 名前はそのままファイルパスの一部になる(.agent/commands/<名前>.md)。
@@ -72,18 +80,7 @@ func New(ws *tools.Workspace) *Registry {
 // なく「安全な文字だけ通す」——ファイル操作の範囲を作業ディレクトリに限定する(tools.Workspace)と
 // 同じ考え方である。
 func isValidName(name string) bool {
-	if name == "" {
-		return false
-	}
-	for _, r := range name {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
-		case r == '-', r == '_':
-		default:
-			return false
-		}
-	}
-	return true
+	return validName.MatchString(name)
 }
 
 // Execute は入力がスラッシュコマンドなら実行して、結果と true を返す。

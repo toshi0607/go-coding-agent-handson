@@ -163,6 +163,7 @@ func (c *Checker) confirm(question, sessionKey, kind string) error {
 // すること。通してよいのは英数字と、パスやオプションに現れるごく
 // 限られた記号(スペース - _ . / = : , + @)だけ。それ以外の文字が
 // 1つでも含まれていたら false(マルチバイト文字も安全側に倒す)。
+// 通してよい文字の集合は、regexp パッケージの文字クラスで書けば1行で表せる。
 //
 // テスト(TestBashAllowlistCannotBeBypassed)は13種類のバイパスを
 // 試してくる。拒否リストで書くと、どれかが必ずすり抜ける。

@@ -16,21 +16,19 @@
 
 ### ヒント1
 
-step 04 の `isSimpleCommand` と同じ構造です。空文字は false。あとは1ルーンずつ見て、英数字と `-` `_` 以外が1つでもあれば false。
+step 04 の `isSimpleCommand` と同じ構造です。正規表現の文字クラスで「英数字と `-` `_` だけ」を表し、`regexp.MustCompile` でパッケージレベルの変数にしておいて、`MatchString` で判定します。空文字は false にしたいので、繰り返しは `*` ではなく `+`(1文字以上)にします。
 
 ### ヒント2
 
 ```go
-for _, r := range name {
-	switch {
-	case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
-	case r == '-', r == '_':
-	default:
-		return false
-	}
+var validName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
+
+func isValidName(name string) bool {
+	return validName.MatchString(name)
 }
-return true
 ```
+
+`regexp` の import を忘れずに。
 
 `/` や `.` を許さないので、`../` を含む名前も絶対パスもこの1つの検証で弾けます。「危険な形を列挙する」のではなく「安全な形を定義する」——同じ原則が3度目の登場です(workspace、isSimpleCommand、そしてここ)。
 

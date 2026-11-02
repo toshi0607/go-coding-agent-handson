@@ -80,7 +80,8 @@ func New(ws *tools.Workspace) *Registry {
 // 対策はどちらも同じで、「危険な文字を弾く」のではなく「コマンド名として
 // 安全な文字(英数字と - _)だけを通す」。ファイル操作の範囲を作業ディレクトリに
 // 限定する tools.Workspace や bash の isSimpleCommand と同じ考え方である。
-// 空文字も false にすること。
+// 空文字も false にすること。isSimpleCommand と同じく、regexp パッケージの
+// 文字クラスで書ける。
 //
 // なお、この検証だけでは足りない。コマンドファイル自身がシンボリック
 // リンクなら、名前が妥当でも外を読めてしまう——だから Execute では

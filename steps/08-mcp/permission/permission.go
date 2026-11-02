@@ -18,6 +18,7 @@ package permission
 import (
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 )
 
@@ -155,22 +156,22 @@ func (c *Checker) confirm(question, sessionKey, kind string) error {
 	}
 }
 
+// simpleCommand は isSimpleCommand が通す形。英数字と、パス・オプションに
+// 現れるごく限られた記号(スペース _ . / = : , + @ -)だけで構成された文字列。
+//
+// Go の regexp は RE2 方式で、照合は入力の長さに比例する時間で終わる
+// (バックトラックで時間が爆発しない)ので、この判定に使ってよい。
+// コンパイルはパッケージ初期化時の1回だけにする。
+var simpleCommand = regexp.MustCompile(`^[A-Za-z0-9 _./=:,+@-]*$`)
+
 // isSimpleCommand はコマンドが「1つのコマンド呼び出しだけ」であることを
 // 保証できる形かを判定する。許可するのは英数字と、パス・オプションに
 // 現れるごく限られた記号のみ。改行・リダイレクト・パイプ・変数展開・
 // クォート・ワイルドカードはすべて「単純でない」と判定する。
 func isSimpleCommand(command string) bool {
-	for _, r := range command {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
-		case r == ' ', r == '-', r == '_', r == '.', r == '/', r == '=', r == ':', r == ',', r == '+', r == '@':
-		default:
-			// マルチバイト文字(日本語のファイル名など)もここに落ちる。
-			// 安全側に倒して確認に回す。
-			return false
-		}
-	}
-	return true
+	// マルチバイト文字(日本語のファイル名など)は文字クラスに含まれないので
+	// false になる。安全側に倒して確認に回す。
+	return simpleCommand.MatchString(command)
 }
 
 // commandHead はコマンド文字列の先頭単語を返す。
