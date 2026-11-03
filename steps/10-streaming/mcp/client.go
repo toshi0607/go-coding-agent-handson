@@ -60,6 +60,8 @@ type Server struct {
 type Client struct {
 	serverName string
 	session    *sdk.ClientSession
+	// stderr はサーバーの標準エラー出力の転送先。Close で最後の行を書き出す。
+	stderr *prefixWriter
 }
 
 // Connect はMCPサーバーを子プロセスとして起動し、接続する。
@@ -69,8 +71,10 @@ func Connect(ctx context.Context, s Server) (*Client, error) {
 	// たいてい標準エラー出力にしかなく、これを転送し忘れると
 	// 「なぜか繋がらない」だけが残る。複数サーバーのログが混ざるので、
 	// どのサーバーの出力かが分かるよう接頭辞を付ける。
+	var stderr *prefixWriter
 	if s.Stderr != nil {
-		cmd.Stderr = &prefixWriter{w: s.Stderr, prefix: "[mcp:" + s.Name + "] "}
+		stderr = &prefixWriter{w: s.Stderr, prefix: "[mcp:" + s.Name + "] "}
+		cmd.Stderr = stderr
 	}
 
 	// CommandTransport は子プロセスの起動と終了を受け持つ。Close では
@@ -89,6 +93,7 @@ func Connect(ctx context.Context, s Server) (*Client, error) {
 	if err != nil {
 		return nil, fmt.Errorf("MCPサーバー %s に接続できませんでした: %w", s.Name, err)
 	}
+	c.stderr = stderr
 	return c, nil
 }
 
@@ -118,7 +123,10 @@ func connect(ctx context.Context, serverName string, t sdk.Transport) (*Client, 
 
 // Close は接続を閉じ、子プロセスの終了を待つ。
 func (c *Client) Close() error {
-	return c.session.Close()
+	err := c.session.Close()
+	// 子プロセスが終わった後なので、改行で終わらない最後の行もここで書き出す。
+	c.stderr.flush()
+	return err
 }
 
 // prefixWriter は書き込みの各行の先頭に固定の文字列を足す io.Writer。
@@ -145,4 +153,15 @@ func (p *prefixWriter) Write(data []byte) (int, error) {
 			return 0, err
 		}
 	}
+}
+
+// flush は改行が来ないまま溜まっている出力を、接頭辞と改行を付けて書き出す。
+// p が nil(stderr を転送しない設定)なら何もしない。
+func (p *prefixWriter) flush() {
+	if p == nil || len(p.buf) == 0 {
+		return
+	}
+	line := append([]byte(p.prefix), p.buf...)
+	p.buf = nil
+	_, _ = p.w.Write(append(line, '\n'))
 }

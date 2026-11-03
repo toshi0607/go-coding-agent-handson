@@ -96,6 +96,12 @@ func (b *Bash) Run(ctx context.Context, input json.RawMessage) (string, error) {
 	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
 		return "", fmt.Errorf("タイムアウト(%s)しました: %w\n%s", bashTimeout, ctx.Err(), output)
 	}
+	if errors.Is(err, exec.ErrWaitDelay) {
+		// bash 自体は終わったが、バックグラウンドで起動したプロセスが出力を
+		// 開いたままだった(開発サーバーの起動など)。失敗として返すと、
+		// LLMが起動し直して二重に起動しかねないので、成功として返す。
+		return string(output) + "\n(バックグラウンドのプロセスが出力を開いたままのため、出力を待つのをやめました)", nil
+	}
 	if err != nil {
 		// 非ゼロ終了はエラーとして返すが、出力も含める。
 		// LLMはエラー出力を読んで次の一手を考えるので、出力こそが本体。
