@@ -277,18 +277,20 @@ func TestTaskToolRunsSubAgent(t *testing.T) {
 	}
 }
 
-// compactionを「ターンの境目だけ」で行うことの不変条件テスト。
+// compactionを「tool_use と tool_result の対応が閉じている地点」だけで
+// 行うことの不変条件テスト。
 //
-// ツールループの途中で履歴を要約すると、tool_use に対応する
-// tool_result が要約に飲み込まれ、以降のリクエストがすべてAPIに
-// 拒否される。閾値を極端に下げても、ループの中では圧縮が
-// 走らないことを確認する。
-func TestCompactionHappensOnlyAtTurnBoundary(t *testing.T) {
+// ツールを呼んだレスポンスを履歴に足した直後(tool_result を足す前)に
+// 履歴を要約すると、要約リクエストに tool_result のない tool_use が残り、
+// APIに拒否される。閾値を極端に下げて、圧縮が tool_result を足した後と
+// ターンの開始時に走り、どの要約リクエストでも対応が閉じていることを確認する。
+func TestCompactionHappensOnlyWherePairsAreClosed(t *testing.T) {
 	tool := &fakeTool{name: "spin", result: "ツールの結果"}
 	client := llm.NewReplayClient(
 		llm.ToolUseResponse("toolu_1", "spin", `{}`), // 1回目: ツール呼び出し
-		llm.TextResponse("終わりました"),                   // 2回目: ターン終了
-		llm.TextResponse("ここまでの要約"),                  // 3回目: 2ターン目の頭で走る圧縮
+		llm.TextResponse("ここまでの要約"),                  // 2回目: tool_result を足した後の圧縮
+		llm.TextResponse("終わりました"),                   // 3回目: ターン終了
+		llm.TextResponse("ここまでの要約2"),                 // 4回目: 2ターン目の頭で走る圧縮
 		llm.TextResponse("2ターン目の応答"),
 	)
 	a := New(Config{
@@ -303,24 +305,28 @@ func TestCompactionHappensOnlyAtTurnBoundary(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// 1ターン目のLLM呼び出しは2回だけ。間に要約リクエストが
-	// 挟まっていたら3回になる。
-	if n := len(client.Requests()); n != 2 {
-		t.Errorf("ツールループの途中で圧縮が走った: LLM呼び出し%d回", n)
+	// 1ターン目のLLM呼び出しは、ツール呼び出し・要約・ターン終了の3回。
+	// 2回なら tool_result を足した後の圧縮が走っていない。
+	reqs := client.Requests()
+	if len(reqs) != 3 {
+		t.Fatalf("tool_result を足した後の圧縮が走っていない: LLM呼び出し%d回", len(reqs))
 	}
-	// 検査対象の tool_use が実際に履歴にあること。
-	// これを確認しないと、下の検査が「何も見つからないので合格」に
+	// 要約リクエストの履歴で、tool_use に tool_result が対応していること。
+	// 件数も確かめないと、tool_use が無いせいで「何も見つからないので合格」に
 	// なっていても気づけない。
-	if n := assertToolUsesAreClosed(t, a.History()); n != 1 {
-		t.Fatalf("履歴に tool_use が1件あるはず: %d件", n)
+	if n := assertToolUsesAreClosed(t, reqs[1].Messages); n != 1 {
+		t.Fatalf("要約リクエストに tool_use が1件あるはず: %d件", n)
 	}
 
-	// ターンが終われば圧縮は走る(閾値を超えているので)。
+	// ターンが終われば、次のターンの開始時にも圧縮は走る(閾値を超えているので)。
 	if _, err := a.Run(t.Context(), "続けて"); err != nil {
 		t.Fatal(err)
 	}
-	if n := len(client.Requests()); n != 4 {
-		t.Errorf("ターンの境目での圧縮が走っていない: LLM呼び出し%d回", n)
+	if n := len(client.Requests()); n != 5 {
+		t.Errorf("ターンの開始時の圧縮が走っていない: LLM呼び出し%d回", n)
+	}
+	for _, req := range client.Requests() {
+		assertToolUsesAreClosed(t, req.Messages)
 	}
 	assertToolUsesAreClosed(t, a.History())
 }

@@ -41,7 +41,7 @@ if a.shouldCompact() {
 }
 ```
 
-これを**どこに置くか**が問題です。置き場所は「ユーザー入力を履歴に積む前」= ターンの開始時。ツールループの中に置くと `TestCompactionHappensOnlyAtTurnBoundary` が落ちます。なぜ落ちるのかは README の compaction の節を読み直してください。
+これを**どこに置くか**が問題です。置き場所は2か所で、「ユーザー入力を履歴に積む前」= ターンの開始時と、ツールループで tool_result を履歴に積んだ直後です。tool_use を含むレスポンスを積んだ直後(tool_result を積む前)に置くと `TestCompactionHappensOnlyWherePairsAreClosed` が落ちます。2か所目を忘れても落ちます。なぜ落ちるのかは README の compaction の節を読み直してください。
 
 ## 答え合わせ
 

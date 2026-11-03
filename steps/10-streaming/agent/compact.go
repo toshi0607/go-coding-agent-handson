@@ -22,9 +22,14 @@ import (
 )
 
 // defaultCompactThreshold はcompactionを始めるトークン数の目安のデフォルト。
-// モデルの上限(20万〜100万)よりだいぶ手前に設定する。上限ギリギリまで
-// 使うと、要約リクエスト自体が入らなくなるうえ、品質劣化も先に来る。
-const defaultCompactThreshold = 80_000
+// デフォルトのモデル(claude-opus-5-5)の上限100万トークンの半分にしている。
+// 要約は早すぎても遅すぎても損をする。早すぎると要約で詳細が失われ、
+// 要約の直後はエージェントの判断が悪くなる。遅すぎると、コンテキストが
+// 長いほど1リクエストあたりの料金が増える。LangWatchの筆者が自分の
+// 利用記録を計測した記事(https://langwatch.ai/blog/context-tax-when-to-compact)では、25万〜45万で
+// 要約するのが料金の面でよく、筆者自身は50万〜60万で要約している。
+// 上限との差は、判定の後に足されるツールの結果と要約リクエストの分の余裕になる。
+const defaultCompactThreshold = 500_000
 
 // shouldCompact は直近のAPIレスポンスのトークン使用量から、
 // compactionすべきかを判定する。
@@ -74,6 +79,9 @@ func (a *Agent) Compact(ctx context.Context) error {
 	params.MaxTokens = summaryMaxTokens
 	// a.history と配列を共有したまま append すると履歴を
 	// 破壊しうるので、必ず複製してから足す。
+	// ツールループの途中で呼ばれたときは、履歴が tool_result の
+	// userメッセージで終わっているので、userメッセージが2つ続く。
+	// Messages APIは同じroleの連続したメッセージを1つにまとめて扱う。
 	params.Messages = append(slices.Clone(params.Messages),
 		anthropic.NewUserMessage(anthropic.NewTextBlock(summaryPrompt)))
 	// tools を渡す以上、LLMは要約の代わりにツールを呼ぶ選択もできてしまう。
