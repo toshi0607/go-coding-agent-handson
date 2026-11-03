@@ -95,7 +95,7 @@ cd example
 go run ../steps/04-bash-permission
 ```
 
-`example/.agent/settings.json` に allowlist の実例があります。「go vet ./... を実行して」(allowlist内なら確認なし)と「/etc/hosts を読んで」(封じ込めで拒否)を試してみてください。
+`example/.agent/settings.json` に allowlist の実例があります。「go vet ./... を実行して」(allowlist内なら確認なし)と「/etc/hosts を読んで」を試してみてください。`read_file` なら `Workspace` が拒否しますが、`bash` の `cat /etc/hosts` は `cat` が allowlist にあるので確認なしで通ります(本の4章「試し方」を参照)。
 
 ## 防いでいないもの
 
