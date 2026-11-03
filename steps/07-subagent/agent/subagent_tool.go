@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 
 	"github.com/toshi0607/go-coding-agent-handson/steps/07-subagent/tools"
@@ -67,7 +68,7 @@ func (t *SubAgentTool) Run(ctx context.Context, input json.RawMessage) (string, 
 		return "", fmt.Errorf("入力のパースに失敗しました: %w", err)
 	}
 	if in.Prompt == "" {
-		return "", fmt.Errorf("prompt を指定してください")
+		return "", errors.New("prompt を指定してください")
 	}
 
 	// TODO(step07-1): サブエージェントを起動してタスクを委任する。

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func run(t *testing.T, tool Tool, input string) (string, error) {
@@ -153,9 +154,40 @@ func TestBashFailureIncludesOutput(t *testing.T) {
 	}
 }
 
+// bash が起動したバックグラウンドのプロセスが出力を開いたままでも、
+// bash 自身が終われば戻ること。WaitDelay が無いと、CombinedOutput は
+// sleep が終わるまで(タイムアウトの後も)返らない。
+func TestBashReturnsWhenBackgroundProcessKeepsOutputOpen(t *testing.T) {
+	ws := workspaceFor(t, t.TempDir())
+	start := time.Now()
+	_, err := run(t, NewBash(ws), `{"command":"sleep 30 & echo started"}`)
+	if elapsed := time.Since(start); elapsed > 10*time.Second {
+		t.Fatalf("戻るまでに %s かかった", elapsed)
+	}
+	if err == nil || !strings.Contains(err.Error(), "started") {
+		t.Errorf("出力を含むエラーを返すべき: %v", err)
+	}
+}
+
 func must(t *testing.T, err error) {
 	t.Helper()
 	if err != nil {
 		t.Fatal(err)
+	}
+}
+
+// new_str が無い入力はエラーにすること。空文字として扱うと、
+// old_str に一致した部分を黙って消す編集になる。
+func TestEditFileRejectsMissingNewStr(t *testing.T) {
+	dir := t.TempDir()
+	must(t, os.WriteFile(filepath.Join(dir, "f.txt"), []byte("abc"), 0o644))
+
+	if _, err := run(t, NewEditFile(workspaceFor(t, dir)), `{"path":"f.txt","old_str":"b"}`); err == nil {
+		t.Fatal("new_str の無い編集はエラーになるべき")
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "f.txt"))
+	must(t, err)
+	if string(got) != "abc" {
+		t.Errorf("ファイルが書き換えられた: %q", got)
 	}
 }

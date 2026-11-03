@@ -142,3 +142,19 @@ func must(t *testing.T, err error) {
 		t.Fatal(err)
 	}
 }
+
+// new_str が無い入力はエラーにすること。空文字として扱うと、
+// old_str に一致した部分を黙って消す編集になる。
+func TestEditFileRejectsMissingNewStr(t *testing.T) {
+	dir := t.TempDir()
+	must(t, os.WriteFile(filepath.Join(dir, "f.txt"), []byte("abc"), 0o644))
+
+	if _, err := run(t, NewEditFile(dir), `{"path":"f.txt","old_str":"b"}`); err == nil {
+		t.Fatal("new_str の無い編集はエラーになるべき")
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "f.txt"))
+	must(t, err)
+	if string(got) != "abc" {
+		t.Errorf("ファイルが書き換えられた: %q", got)
+	}
+}

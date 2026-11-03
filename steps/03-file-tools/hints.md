@@ -13,8 +13,8 @@
 
 ### ヒント2
 
-- 新規作成は `os.MkdirAll(filepath.Dir(path), 0o755)` してから `os.WriteFile(path, []byte(in.NewStr), 0o644)`
-- 置換は `strings.Replace(content, in.OldStr, in.NewStr, 1)`(最後の引数 1 = 最初の1箇所だけ)
+- 新規作成は `os.MkdirAll(filepath.Dir(path), 0o755)` してから `os.WriteFile(path, []byte(*in.NewStr), 0o644)`
+- 置換は `strings.Replace(content, in.OldStr, *in.NewStr, 1)`(最後の引数 1 = 最初の1箇所だけ)
 - Goの `switch { case 条件: ... }`(式なしswitch)を使うと、5分岐が上から順に読める形で書けます。`os.ReadFile` 直後の分岐と `strings.Count` の分岐で switch を2つに分けるときれいです
 - エラーメッセージには「LLMが次に何をすべきか」を入れてください。見つからない → 「read_file で最新の内容を確認してください」、複数マッチ → 「前後の文脈を含めて一意にしてください」
 

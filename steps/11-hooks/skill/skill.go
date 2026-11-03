@@ -181,12 +181,12 @@ func readLimited(path string, limit int64) ([]byte, error) {
 	return data, nil
 }
 
-func truncate(s string, max int) string {
+func truncate(s string, limit int) string {
 	runes := []rune(s)
-	if len(runes) <= max {
+	if len(runes) <= limit {
 		return s
 	}
-	return string(runes[:max]) + "…"
+	return string(runes[:limit]) + "…"
 }
 
 // parse はSKILL.mdをフロントマターと本文に分ける。

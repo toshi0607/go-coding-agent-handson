@@ -185,11 +185,13 @@ func repl(ctx context.Context, a *agent.Agent, stdin *bufio.Reader) error {
 	for {
 		fmt.Print("\n> ")
 		line, err := stdin.ReadString('\n')
-		if err == io.EOF {
+		// 最後の行に改行がないと、ReadString はその行と io.EOF を同時に返す。
+		// 行が空のときだけ終了し、空でなければその行を処理してから次で終わる。
+		if errors.Is(err, io.EOF) && line == "" {
 			fmt.Println()
 			return nil
 		}
-		if err != nil {
+		if err != nil && !errors.Is(err, io.EOF) {
 			return err
 		}
 		input := strings.TrimSpace(line)

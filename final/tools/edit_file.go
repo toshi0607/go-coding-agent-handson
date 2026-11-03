@@ -47,9 +47,9 @@ func (*EditFile) InputSchema() Schema {
 
 func (e *EditFile) Run(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
-		Path   string `json:"path"`
-		OldStr string `json:"old_str"`
-		NewStr string `json:"new_str"`
+		Path   string  `json:"path"`
+		OldStr string  `json:"old_str"`
+		NewStr *string `json:"new_str"`
 	}
 	if err := json.Unmarshal(input, &in); err != nil {
 		return "", fmt.Errorf("入力のパースに失敗しました: %w", err)
@@ -57,7 +57,13 @@ func (e *EditFile) Run(ctx context.Context, input json.RawMessage) (string, erro
 	if in.Path == "" {
 		return "", errors.New("path を指定してください")
 	}
-	if in.OldStr == in.NewStr {
+	// new_str が無い入力を空文字として扱うと、old_str に一致した部分を
+	// 消す編集になってしまう。InputSchema の Required はLLMへの指示で、
+	// 実行時の検証ではないので、ここで確かめる。
+	if in.NewStr == nil {
+		return "", errors.New("new_str を指定してください。削除するときは空文字を指定してください")
+	}
+	if in.OldStr == *in.NewStr {
 		return "", errors.New("old_str と new_str が同じです")
 	}
 	path, err := e.ws.Resolve(in.Path)
@@ -72,7 +78,7 @@ func (e *EditFile) Run(ctx context.Context, input json.RawMessage) (string, erro
 		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 			return "", err
 		}
-		if err := createNew(path, in.NewStr); err != nil {
+		if err := createNew(path, *in.NewStr); err != nil {
 			return "", err
 		}
 		return fmt.Sprintf("%s を新規作成しました", in.Path), nil
@@ -90,7 +96,7 @@ func (e *EditFile) Run(ctx context.Context, input json.RawMessage) (string, erro
 		return "", fmt.Errorf("old_str がファイル内に %d 回出現します。前後の文脈を含めて一意にしてください", n)
 	}
 
-	updated := strings.Replace(content, in.OldStr, in.NewStr, 1)
+	updated := strings.Replace(content, in.OldStr, *in.NewStr, 1)
 	if err := os.WriteFile(path, []byte(updated), 0o644); err != nil {
 		return "", err
 	}

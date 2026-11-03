@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 
@@ -340,5 +341,51 @@ func TestAutoCompaction(t *testing.T) {
 	first, _ := json.Marshal(h[0])
 	if !strings.Contains(string(first), "要約") {
 		t.Errorf("履歴の先頭が要約になっていない: %s", first)
+	}
+}
+
+// failingTool は固定のエラーを返すテスト用ツール。
+type failingTool struct{ message string }
+
+func (f *failingTool) Name() string              { return "build" }
+func (f *failingTool) Description() string       { return "テスト用" }
+func (f *failingTool) InputSchema() tools.Schema { return tools.Schema{} }
+func (f *failingTool) Run(ctx context.Context, input json.RawMessage) (string, error) {
+	return "", errors.New(f.message)
+}
+
+// ツールが失敗したときのエラーも、成功したときの結果と同じ上限で切り詰めること。
+// 失敗したビルドのログのように、エラーも長くなることがある。
+func TestExecuteToolTruncatesErrorResult(t *testing.T) {
+	client := llm.NewReplayClient(
+		llm.ToolUseResponse("toolu_1", "build", `{}`),
+		llm.TextResponse("ビルドに失敗しました"),
+	)
+	a := New(Config{
+		Client: client, Model: "claude-opus-5-5",
+		Tools:              []tools.Tool{&failingTool{message: strings.Repeat("x", 5000)}},
+		Permission:         allowAll("build"),
+		MaxToolResultChars: 100,
+	})
+	if _, err := a.Run(t.Context(), "ビルドして"); err != nil {
+		t.Fatal(err)
+	}
+
+	msgs := client.Requests()[1].Messages
+	var text string
+	for _, block := range msgs[len(msgs)-1].Content {
+		if r := block.OfToolResult; r != nil {
+			for _, c := range r.Content {
+				if c.OfText != nil {
+					text += c.OfText.Text
+				}
+			}
+		}
+	}
+	if text == "" {
+		t.Fatal("tool_result が見つからない")
+	}
+	if strings.Count(text, "x") != 100 {
+		t.Errorf("エラーが切り詰められていない: %d文字", len([]rune(text)))
 	}
 }

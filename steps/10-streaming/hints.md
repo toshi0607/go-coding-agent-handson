@@ -6,28 +6,33 @@
 
 ### ヒント1
 
-骨組みは次の3段です。
+骨組みは次の4段です。
 
 ```go
-message := anthropic.Message{}
+var message anthropic.Message
+stopped := false
 for stream.Next() {
 	event := stream.Current()
 	// (1) message.Accumulate(event) — エラーなら返す
 	// (2) event が text_delta なら onText に流す(onText nil チェックを忘れずに)
+	//     event が message_stop なら stopped = true
 }
-// (3) stream.Err() を確認してから &message を返す
+// (3) stream.Err() を確認する
+// (4) stopped が false なら io.ErrUnexpectedEOF を包んで返し、true なら &message を返す
 ```
 
 ### ヒント2
 
-text_delta の判別は型スイッチ2段です。`event.AsAny()` が `anthropic.ContentBlockDeltaEvent` のとき、その `Delta.AsAny()` が `anthropic.TextDelta` ならテキスト差分です。
+text_delta の判別は型スイッチ2段です。`event.AsAny()` が `anthropic.ContentBlockDeltaEvent` のとき、その `Delta.AsAny()` が `anthropic.TextDelta` ならテキスト差分です。同じ型スイッチに `anthropic.MessageStopEvent` の case も置けます。
 
 ```go
 switch eventVariant := event.AsAny().(type) {
 case anthropic.ContentBlockDeltaEvent:
-	if delta, ok := eventVariant.Delta.AsAny().(anthropic.TextDelta); ok {
+	if delta, ok := eventVariant.Delta.AsAny().(anthropic.TextDelta); ok && onText != nil {
 		onText(delta.Text)
 	}
+case anthropic.MessageStopEvent:
+	stopped = true
 }
 ```
 

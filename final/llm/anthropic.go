@@ -2,6 +2,8 @@ package llm
 
 import (
 	"context"
+	"fmt"
+	"io"
 
 	"github.com/anthropics/anthropic-sdk-go"
 	"github.com/anthropics/anthropic-sdk-go/option"
@@ -34,24 +36,30 @@ func (c *AnthropicClient) Stream(ctx context.Context, params anthropic.MessageNe
 	// message_start → content_block_start → content_block_delta... → message_stop
 	// Accumulate がイベントを完全な Message に組み立て直してくれるので、
 	// こちらはテキスト差分(text_delta)を表示に流すことだけ考えればよい。
-	message := anthropic.Message{}
+	var message anthropic.Message
+	stopped := false
 	for stream.Next() {
 		event := stream.Current()
 		if err := message.Accumulate(event); err != nil {
 			return nil, err
 		}
-		if onText == nil {
-			continue
-		}
 		switch eventVariant := event.AsAny().(type) {
 		case anthropic.ContentBlockDeltaEvent:
-			if delta, ok := eventVariant.Delta.AsAny().(anthropic.TextDelta); ok {
+			if delta, ok := eventVariant.Delta.AsAny().(anthropic.TextDelta); ok && onText != nil {
 				onText(delta.Text)
 			}
+		case anthropic.MessageStopEvent:
+			stopped = true
 		}
 	}
 	if err := stream.Err(); err != nil {
 		return nil, err
+	}
+	// 接続が途中で切れても、SSEとしては正常に終わったように見えることがある。
+	// そのとき stream.Err() は nil なので、最後のイベントの message_stop が
+	// 届いたかどうかで見分ける。届いていなければレスポンスは未完成である。
+	if !stopped {
+		return nil, fmt.Errorf("message_stop を受け取る前にストリームが終わりました: %w", io.ErrUnexpectedEOF)
 	}
 	return &message, nil
 }
