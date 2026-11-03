@@ -168,8 +168,8 @@ func TestMaxIterationsStopsRunawayLoop(t *testing.T) {
 }
 
 // max_tokens でレスポンスが切れると、生成途中の tool_use が履歴に残ることがある。
-// 対応する tool_result を足さないまま次のターンに進むと、以降すべての
-// リクエストがAPIに拒否されて会話が死ぬ。その回帰テスト。
+// 対応する tool_result を足さないまま次のターンに進むと、会話履歴を消すまで
+// 以降すべてのリクエストがAPIに拒否される。その回帰テスト。
 func TestInterruptedToolUseIsClosedOut(t *testing.T) {
 	// stop_reason: max_tokens だが tool_use ブロックを含むレスポンス。
 	interrupted := `{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5-5",
