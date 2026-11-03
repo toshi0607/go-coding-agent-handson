@@ -115,7 +115,7 @@ func run(oneShot string) error {
 				"read_file":  permission.Allow,
 				"list_files": permission.Allow,
 				// サブエージェント起動自体は安全。サブエージェントが使う
-				// 個々のツールは、そのつど同じ承認フローを通る。
+				// 個々のツールは、その都度同じ承認フローを通る。
 				"agent": permission.Allow,
 			},
 			BashAllowlist: settings.BashAllowlist,
