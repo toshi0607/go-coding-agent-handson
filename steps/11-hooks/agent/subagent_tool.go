@@ -25,17 +25,17 @@ import (
 // promptには「サブエージェントが単独で作業を完遂できるだけの情報」を
 // すべて書き込む必要がある。LLMへのツール説明でそれを要求している。
 type SubAgentTool struct {
-	// newSubAgent はサブエージェントを作る関数。agent ツールが呼ばれる
-	// たびに呼び、会話履歴が空の Agent を作る。
+	// cfg はサブエージェントの設定。agent ツールが呼ばれるたびに
+	// New(cfg) で会話履歴が空の Agent を作る。
 	// どんなツール・権限を持たせるかは呼び出し側(main)が決める。
-	newSubAgent func() *Agent
+	cfg Config
 }
 
 // NewSubAgentTool は SubAgentTool を作る。
-// newSubAgent が返すエージェントには SubAgentTool 自身を含めないこと。
+// cfg.Tools には SubAgentTool 自身を含めないこと。
 // 含めると入れ子にできるが、この実装は入れ子の深さを数えないので含めない。
-func NewSubAgentTool(newSubAgent func() *Agent) *SubAgentTool {
-	return &SubAgentTool{newSubAgent: newSubAgent}
+func NewSubAgentTool(cfg Config) *SubAgentTool {
+	return &SubAgentTool{cfg: cfg}
 }
 
 func (t *SubAgentTool) Name() string { return "agent" }
@@ -71,7 +71,7 @@ func (t *SubAgentTool) Run(ctx context.Context, input json.RawMessage) (string, 
 
 	// サブエージェントは毎回まっさらな状態で作る。
 	// 会話履歴は空。ここが「コンテキスト分離」の実装のすべてである。
-	sub := t.newSubAgent()
+	sub := New(t.cfg)
 	result, err := sub.Run(ctx, in.Prompt)
 	if err != nil {
 		return "", fmt.Errorf("サブエージェントの実行に失敗しました: %w", err)

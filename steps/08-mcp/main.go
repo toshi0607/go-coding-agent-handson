@@ -149,15 +149,13 @@ func run(oneShot string) error {
 	//   - 出力は捨てる(親の表示を汚さない)
 	//   - 承認の質問に出所を付ける
 	// という3点だけが異なる。
-	agentTool := agent.NewSubAgentTool(func() *agent.Agent {
-		return agent.New(agent.Config{
-			Client:       client,
-			Model:        model,
-			SystemPrompt: systemPrompt,
-			Tools:        baseTools,
-			Permission:   subChecker,
-			Out:          io.Discard,
-		})
+	agentTool := agent.NewSubAgentTool(agent.Config{
+		Client:       client,
+		Model:        model,
+		SystemPrompt: systemPrompt,
+		Tools:        baseTools,
+		Permission:   subChecker,
+		Out:          io.Discard,
 	})
 
 	mainAgent := agent.New(agent.Config{
@@ -165,8 +163,8 @@ func run(oneShot string) error {
 		Model:        model,
 		SystemPrompt: systemPrompt,
 		// append(baseTools, agentTool) と書いてはいけない。baseTools に
-		// 容量の余りがあると、追記先が上のクロージャが参照している
-		// 配列そのものになりうる。今は実害がなくても、あとから
+		// 容量の余りがあると、追記先がサブエージェントの Config.Tools と同じ
+		// 配列になりうる。今は実害がなくても、あとから
 		// 要素を足したときに黙って壊れる類のバグなので、
 		// 新しいスライスを作る slices.Concat を使う。
 		Tools:      slices.Concat(baseTools, []tools.Tool{agentTool}),

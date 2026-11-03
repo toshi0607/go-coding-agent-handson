@@ -25,17 +25,17 @@ import (
 // promptには「サブエージェントが単独で作業を完遂できるだけの情報」を
 // すべて書き込む必要がある。LLMへのツール説明でそれを要求している。
 type SubAgentTool struct {
-	// newSubAgent はサブエージェントを作る関数。agent ツールが呼ばれる
-	// たびに呼び、会話履歴が空の Agent を作る。
+	// cfg はサブエージェントの設定。agent ツールが呼ばれるたびに
+	// New(cfg) で会話履歴が空の Agent を作る。
 	// どんなツール・権限を持たせるかは呼び出し側(main)が決める。
-	newSubAgent func() *Agent
+	cfg Config
 }
 
 // NewSubAgentTool は SubAgentTool を作る。
-// newSubAgent が返すエージェントには SubAgentTool 自身を含めないこと。
+// cfg.Tools には SubAgentTool 自身を含めないこと。
 // 含めると入れ子にできるが、この実装は入れ子の深さを数えないので含めない。
-func NewSubAgentTool(newSubAgent func() *Agent) *SubAgentTool {
-	return &SubAgentTool{newSubAgent: newSubAgent}
+func NewSubAgentTool(cfg Config) *SubAgentTool {
+	return &SubAgentTool{cfg: cfg}
 }
 
 func (t *SubAgentTool) Name() string { return "agent" }
@@ -71,7 +71,7 @@ func (t *SubAgentTool) Run(ctx context.Context, input json.RawMessage) (string, 
 
 	// TODO(step07-1): サブエージェントを起動してタスクを委任する。
 	//
-	//  - t.newSubAgent() でサブエージェントを作る。newSubAgent が返すのは
+	//  - New(t.cfg) でサブエージェントを作る。New が返すのは
 	//    会話履歴が空の、毎回まっさらなエージェントである
 	//  - 渡すのは in.Prompt だけ。親の会話履歴は渡さない(そもそも
 	//    渡せる口がないことを確認してほしい)。ここが「コンテキスト分離」の
