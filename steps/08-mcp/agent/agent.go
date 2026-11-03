@@ -235,7 +235,7 @@ func (a *Agent) executeTool(ctx context.Context, block anthropic.ContentBlockUni
 	// 1回のレスポンスで複数のツールを呼ぶとき、途中で Ctrl-C を押したら
 	// 残りのツールは実行しない。ctx を見ないツール(edit_file など)は、
 	// キャンセルの後でも書き込んでしまうからである。
-	if err := ctx.Err(); err != nil {
+	if ctx.Err() != nil {
 		return anthropic.NewToolResultBlock(block.ID, "キャンセルされたため、ツールを実行しませんでした", true)
 	}
 

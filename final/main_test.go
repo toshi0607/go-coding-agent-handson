@@ -6,6 +6,7 @@ import (
 	"io"
 	"strings"
 	"testing"
+	"time"
 )
 
 // 通常の行と、改行で終わらない最後の行を、ReadString と同じ順で返すこと。
@@ -36,5 +37,25 @@ func TestLineReaderReturnsOnCancel(t *testing.T) {
 	cancel()
 	if _, err := lr.ReadLine(ctx); !errors.Is(err, context.Canceled) {
 		t.Fatalf("キャンセルで戻るべき: %v", err)
+	}
+}
+
+// 行がすでに届いていても、ctx がキャンセルされていれば行を返さないこと。
+// 承認の入力(y)を Ctrl-C の後に拾って、ツールを実行しないようにするため。
+// select は準備のできた case をランダムに選ぶので、何度か繰り返して確かめる。
+func TestLineReaderPrefersCancelOverArrivedLine(t *testing.T) {
+	for range 20 {
+		r, w := io.Pipe()
+		lr := newLineReader(r)
+		go w.Write([]byte("y\n"))
+		time.Sleep(5 * time.Millisecond) // 読み取り用のgoroutineが行を送ろうとしている状態にする
+
+		ctx, cancel := context.WithCancel(t.Context())
+		cancel()
+		line, err := lr.ReadLine(ctx)
+		w.Close()
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("キャンセルの後に行を返した: %q, %v", line, err)
+		}
 	}
 }
