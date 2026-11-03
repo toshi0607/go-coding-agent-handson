@@ -232,6 +232,13 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 func (a *Agent) executeTool(ctx context.Context, block anthropic.ContentBlockUnion) anthropic.ContentBlockParamUnion {
 	fmt.Fprintf(a.out, "⏺ %s(%s)\n", block.Name, compactJSON(string(block.Input)))
 
+	// 1回のレスポンスで複数のツールを呼ぶとき、途中で Ctrl-C を押したら
+	// 残りのツールは実行しない。ctx を見ないツール(edit_file など)は、
+	// キャンセルの後でも書き込んでしまうからである。
+	if err := ctx.Err(); err != nil {
+		return anthropic.NewToolResultBlock(block.ID, "キャンセルされたため、ツールを実行しませんでした", true)
+	}
+
 	tool, ok := a.toolsByName[block.Name]
 	if !ok {
 		return anthropic.NewToolResultBlock(block.ID, fmt.Sprintf("ツール %s は存在しません", block.Name), true)

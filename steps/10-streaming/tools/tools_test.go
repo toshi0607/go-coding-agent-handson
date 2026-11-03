@@ -157,15 +157,19 @@ func TestBashFailureIncludesOutput(t *testing.T) {
 // bash が起動したバックグラウンドのプロセスが出力を開いたままでも、
 // bash 自身が終われば戻ること。WaitDelay が無いと、CombinedOutput は
 // sleep が終わるまで(タイムアウトの後も)返らない。
+// bash は終了コード0で終わっているので、成功として出力を返す。
 func TestBashReturnsWhenBackgroundProcessKeepsOutputOpen(t *testing.T) {
 	ws := workspaceFor(t, t.TempDir())
 	start := time.Now()
-	_, err := run(t, NewBash(ws), `{"command":"sleep 30 & echo started"}`)
-	if elapsed := time.Since(start); elapsed > 10*time.Second {
+	got, err := run(t, NewBash(ws), `{"command":"sleep 10 & echo started"}`)
+	if elapsed := time.Since(start); elapsed > 5*time.Second {
 		t.Fatalf("戻るまでに %s かかった", elapsed)
 	}
-	if err == nil || !strings.Contains(err.Error(), "started") {
-		t.Errorf("出力を含むエラーを返すべき: %v", err)
+	if err != nil {
+		t.Fatalf("成功として返すべき: %v", err)
+	}
+	if !strings.Contains(got, "started") {
+		t.Errorf("出力が含まれていない: %q", got)
 	}
 }
 

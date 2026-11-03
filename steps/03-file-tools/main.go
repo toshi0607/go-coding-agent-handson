@@ -35,7 +35,8 @@ func main() {
 	oneShot := flag.String("p", "", "対話モードの代わりに、この1つの依頼を実行して終了する")
 	flag.Parse()
 
-	if err := run(*oneShot); err != nil {
+	// 入力待ちの間の Ctrl-C は、エラーではなく通常の終了として扱う。
+	if err := run(*oneShot); err != nil && !errors.Is(err, context.Canceled) {
 		fmt.Fprintln(os.Stderr, "エラー:", err)
 		os.Exit(1)
 	}
@@ -142,6 +143,8 @@ func newLineReader(r io.Reader) *lineReader {
 }
 
 // ReadLine は1行を返す。ctx がキャンセルされたら ctx.Err() を返す。
+// キャンセルの後も、読み取り用のgoroutineは次の行を待ったまま残る。
+// プロセスはそのまま終了するので、実害はない。
 // bufio.Reader の ReadString と同じく、最後の行に改行がなければ
 // その行と io.EOF を同時に返す。
 func (lr *lineReader) ReadLine(ctx context.Context) (string, error) {
@@ -149,6 +152,12 @@ func (lr *lineReader) ReadLine(ctx context.Context) (string, error) {
 	case <-ctx.Done():
 		return "", ctx.Err()
 	case r, ok := <-lr.lines:
+		// 行の受信とキャンセルが同時に起きると、select はどちらを選ぶか
+		// 決まっていない。承認の入力をキャンセルの後に受け取らないよう、
+		// 受信した後にもキャンセルを確かめる。
+		if ctx.Err() != nil {
+			return "", ctx.Err()
+		}
 		if !ok {
 			return "", io.EOF
 		}

@@ -335,3 +335,19 @@ func TestPrefixWriter(t *testing.T) {
 		t.Errorf("got %q, want %q", got, want)
 	}
 }
+
+// 改行で終わらない最後の行は、flush で書き出されること。
+// サーバーが改行なしのエラーを出して終わったとき、手がかりが消えないようにする。
+func TestPrefixWriterFlushesLastLine(t *testing.T) {
+	var buf bytes.Buffer
+	w := &prefixWriter{w: &buf, prefix: "[mcp:weather] "}
+	if _, err := w.Write([]byte("起動しました\npanic: 設定がありません")); err != nil {
+		t.Fatal(err)
+	}
+	w.flush()
+
+	want := "[mcp:weather] 起動しました\n[mcp:weather] panic: 設定がありません\n"
+	if got := buf.String(); got != want {
+		t.Errorf("got %q, want %q", got, want)
+	}
+}
