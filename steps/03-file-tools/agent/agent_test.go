@@ -55,7 +55,7 @@ func TestToolLoop(t *testing.T) {
 		Tools: []tools.Tool{tool},
 	})
 
-	got, err := a.Run(t.Context(), "いま何時?")
+	got, err := a.Run(t.Context(), "いま何時？")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}

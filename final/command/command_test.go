@@ -60,7 +60,7 @@ func TestExecuteRecognizesCommands(t *testing.T) {
 	notCommands := []string{
 		"普通の入力",
 		"/Users/foo/main.go を読んで",
-		"/etc/hosts の中身は?",
+		"/etc/hosts の中身は？",
 		"/",
 		"/ 何か",
 		"/../../etc/passwd",

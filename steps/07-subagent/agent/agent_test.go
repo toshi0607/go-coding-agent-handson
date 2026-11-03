@@ -67,7 +67,7 @@ func TestToolLoop(t *testing.T) {
 		Permission: allowAll("get_time"),
 	})
 
-	got, err := a.Run(t.Context(), "いま何時?")
+	got, err := a.Run(t.Context(), "いま何時？")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -242,7 +242,7 @@ func TestTaskToolRunsSubAgent(t *testing.T) {
 		Permission: allowAll("task"),
 	})
 
-	got, err := parent.Run(t.Context(), "認証処理どこ?")
+	got, err := parent.Run(t.Context(), "認証処理どこ？")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
@@ -272,7 +272,7 @@ func TestTaskToolRunsSubAgent(t *testing.T) {
 	if !strings.Contains(string(subFirst), "認証処理の場所を調べて") {
 		t.Errorf("サブエージェントに prompt が渡っていない: %s", subFirst)
 	}
-	if strings.Contains(string(subFirst), "認証処理どこ?") {
+	if strings.Contains(string(subFirst), "認証処理どこ？") {
 		t.Errorf("親のユーザー入力がサブエージェントに漏れている: %s", subFirst)
 	}
 }

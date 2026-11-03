@@ -67,7 +67,7 @@ func TestToolLoop(t *testing.T) {
 		Permission: allowAll("get_time"),
 	})
 
-	got, err := a.Run(t.Context(), "いま何時?")
+	got, err := a.Run(t.Context(), "いま何時？")
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
