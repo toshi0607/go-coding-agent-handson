@@ -118,10 +118,10 @@ func (c *Checker) checkBash(input json.RawMessage) error {
 	// 「危険な形を列挙して弾く」(拒否リスト)は必ず漏れる。
 	//
 	// そこで判定を反転し、「安全と言い切れる形だけを通す」
-	// (許可リスト)にする。1コマンド・1行・シェルのメタ文字なし。
+	// (許可リスト)にする。1コマンド・1行・英数字と一部の記号だけ。
 	// それ以外は先頭単語が何であれユーザー確認に回す。
 	if !isSimpleCommand(in.Command) {
-		question := fmt.Sprintf("シェルのメタ文字を含むコマンドの実行を許可しますか?\n  $ %s", in.Command)
+		question := fmt.Sprintf("英数字と一部の記号以外を含むコマンドの実行を許可しますか?\n  $ %s", in.Command)
 		return c.confirm(question, "", "コマンド")
 	}
 
