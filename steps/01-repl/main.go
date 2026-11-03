@@ -60,20 +60,24 @@ func run(oneShot string) error {
 		_, err := mainAgent.Run(ctx, oneShot)
 		return err
 	}
-	return repl(ctx, mainAgent, bufio.NewReader(os.Stdin))
+	return repl(ctx, mainAgent, newLineReader(os.Stdin))
 }
 
 // repl は対話ループ。入力を読み、エージェントに渡す。
-func repl(ctx context.Context, a *agent.Agent, stdin *bufio.Reader) error {
+func repl(ctx context.Context, a *agent.Agent, stdin *lineReader) error {
 	fmt.Println("ミニコーディングエージェント(Ctrl-D で終了)")
 	for {
 		fmt.Print("\n> ")
-		line, err := stdin.ReadString('\n')
+		line, err := stdin.ReadLine(ctx)
 		// 最後の行に改行がないと、ReadString はその行と io.EOF を同時に返す。
 		// 行が空のときだけ終了し、空でなければその行を処理してから次で終わる。
 		if errors.Is(err, io.EOF) && line == "" {
 			fmt.Println()
 			return nil
+		}
+		if ctx.Err() != nil {
+			fmt.Println()
+			return nil // 入力待ちの間の Ctrl-C
 		}
 		if err != nil && !errors.Is(err, io.EOF) {
 			return err
@@ -89,5 +93,51 @@ func repl(ctx context.Context, a *agent.Agent, stdin *bufio.Reader) error {
 			}
 			fmt.Println("エラー:", err)
 		}
+	}
+}
+
+// lineReader は標準入力を別のgoroutineで1行ずつ読む。
+//
+// bufio.Reader の ReadString は、Ctrl-C で ctx がキャンセルされても
+// 戻らない。入力待ちの間に Ctrl-C を押しても終了しないのはそのため。
+// 読み取りを別のgoroutineに任せ、ReadLine は「行が届く」と
+// 「ctx がキャンセルされる」の早い方を待つ。
+type lineReader struct {
+	lines chan lineResult
+}
+
+type lineResult struct {
+	line string
+	err  error
+}
+
+func newLineReader(r io.Reader) *lineReader {
+	lr := &lineReader{lines: make(chan lineResult)}
+	go func() {
+		br := bufio.NewReader(r)
+		for {
+			line, err := br.ReadString('\n')
+			lr.lines <- lineResult{line, err}
+			if err != nil {
+				close(lr.lines)
+				return
+			}
+		}
+	}()
+	return lr
+}
+
+// ReadLine は1行を返す。ctx がキャンセルされたら ctx.Err() を返す。
+// bufio.Reader の ReadString と同じく、最後の行に改行がなければ
+// その行と io.EOF を同時に返す。
+func (lr *lineReader) ReadLine(ctx context.Context) (string, error) {
+	select {
+	case <-ctx.Done():
+		return "", ctx.Err()
+	case r, ok := <-lr.lines:
+		if !ok {
+			return "", io.EOF
+		}
+		return r.line, r.err
 	}
 }
