@@ -20,7 +20,7 @@
 step 05の解答(プロンプト組み立て)は埋まった状態で始まります。今回増えたのは:
 
 - [agent/truncate.go](agent/truncate.go) — ツール結果の切り詰め(課題)
-- [agent/compact.go](agent/compact.go) — compactionの判定 `shouldCompact` と要約 `Compact`(実装済み)
+- [agent/compact.go](agent/compact.go) — compactionの判定 `shouldCompact`、要約 `Compact`、判定して要約する `compactIfNeeded`(実装済み。要約に失敗しても、警告を出してターンを続ける)
 - [agent/agent.go](agent/agent.go) — `Config` の `CompactThreshold`・`MaxToolResultChars`、`lastUsageTokens` の記録、`executeTool` での切り詰め呼び出し、自動発動(課題)
 
 ## トークンはAPIに数えてもらう

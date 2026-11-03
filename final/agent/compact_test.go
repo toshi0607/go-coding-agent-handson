@@ -110,3 +110,61 @@ func TestCompactKeepsHistoryWhenSummaryIsEmpty(t *testing.T) {
 		t.Errorf("会話履歴が置き換えられた: %d件", n)
 	}
 }
+
+// 自動compactionの要約に失敗しても、会話履歴を残したままターンを続けること。
+// 失敗のたびにターンを止めると、次のターンも閾値を超えたまま要約に失敗し、
+// ユーザーは会話を先に進められなくなる。
+func TestRunContinuesWhenCompactionFails(t *testing.T) {
+	client := llm.NewReplayClient(llm.TextResponse(""), llm.TextResponse("答えです"))
+	a := New(Config{Client: client, Model: "claude-opus-5-5", CompactThreshold: 1})
+	a.history = []anthropic.MessageParam{
+		anthropic.NewUserMessage(anthropic.NewTextBlock("REPLを実装して")),
+		anthropic.NewAssistantMessage(anthropic.NewTextBlock("実装しました")),
+	}
+	a.lastUsageTokens = 2
+
+	got, err := a.Run(t.Context(), "次は？")
+	if err != nil {
+		t.Fatalf("要約に失敗してもターンは続くはず: %v", err)
+	}
+	if got != "答えです" {
+		t.Errorf("ターンの応答: %q", got)
+	}
+	if n := len(a.History()); n != 4 {
+		t.Errorf("会話履歴は元の2件と今回の2件のはず: %d件", n)
+	}
+}
+
+// 要約に失敗したターンでは、ターンの残りで要約を試し直さないこと。
+// 閾値を超えたままなので、試し直すとツールを呼ぶたびに要約の
+// リクエストが増える。
+func TestRunSkipsCompactionForRestOfTurnAfterFailure(t *testing.T) {
+	tool := &fakeTool{name: "spin", result: "ツールの結果"}
+	client := llm.NewReplayClient(
+		llm.TextResponse(""),                         // ターンの冒頭の要約(失敗)
+		llm.ToolUseResponse("toolu_1", "spin", `{}`), // ツール呼び出し
+		llm.TextResponse("終わりました"),                   // ターン終了
+	)
+	a := New(Config{
+		Client: client, Model: "claude-opus-5-5",
+		Tools:            []tools.Tool{tool},
+		Permission:       allowAll("spin"),
+		CompactThreshold: 1, MaxToolResultChars: 1000,
+	})
+	a.history = []anthropic.MessageParam{
+		anthropic.NewUserMessage(anthropic.NewTextBlock("REPLを実装して")),
+		anthropic.NewAssistantMessage(anthropic.NewTextBlock("実装しました")),
+	}
+	a.lastUsageTokens = 2
+
+	got, err := a.Run(t.Context(), "やって")
+	if err != nil {
+		t.Fatalf("要約に失敗してもターンは続くはず: %v", err)
+	}
+	if got != "終わりました" {
+		t.Errorf("ターンの応答: %q", got)
+	}
+	if n := len(client.Requests()); n != 3 {
+		t.Errorf("要約のリクエストは1ターンに1回のはず: LLM呼び出し%d回", n)
+	}
+}

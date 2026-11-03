@@ -80,6 +80,10 @@ type Agent struct {
 	// lastUsageTokens は直近のAPIレスポンスのトークン使用量
 	// (入力+出力)。compaction判定に使う。
 	lastUsageTokens int
+
+	// compactFailed は、このターンで自動compactionの要約に失敗したか。
+	// 失敗したターンの残りでは要約を試し直さない(compactIfNeeded)。
+	compactFailed bool
 }
 
 // New はエージェントを作る。
@@ -125,11 +129,13 @@ func New(cfg Config) *Agent {
 // Run は1ユーザーターンを処理する。ツール実行を挟みながらLLMとの
 // 往復を繰り返し、最終的なテキストのレスポンスを返す。
 func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
+	a.compactFailed = false
+
 	// TODO(step06-2): 自動compactionを発動させる(2か所。1か所目はここ)。
 	//
-	// 直近のトークン使用量(a.lastUsageTokens)が閾値を超えていたら
-	// (a.shouldCompact)、履歴を圧縮する(a.Compact。
-	// エラーはそのまま返してよい)。
+	// a.compactIfNeeded を呼ぶ。直近のトークン使用量(a.lastUsageTokens)が
+	// 閾値を超えていれば(a.shouldCompact)、履歴を圧縮する(a.Compact)。
+	// 返ってきたエラー(Ctrl-C のときだけ)は、そのまま返してよい。
 	//
 	// このstepの主題は「圧縮のコードを書くこと」ではなく「どこで
 	// 圧縮するか」である。圧縮してよいのは tool_use と tool_result の
