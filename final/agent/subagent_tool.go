@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/toshi0607/go-coding-agent-handson/steps/11-hooks/tools"
+	"github.com/toshi0607/go-coding-agent-handson/final/tools"
 )
 
-// TaskTool はサブエージェントを起動するツール。
+// SubAgentTool はサブエージェントを起動するツール。
 //
 // なぜサブエージェントが必要か。調査タスクは大量のツール結果
 // (ファイル一覧、grep結果、読んだファイルの中身)を生むが、
@@ -24,30 +24,30 @@ import (
 // 親の文脈を知らないからこそコンテキストが軽くなる。裏返すと、
 // promptには「サブエージェントが単独で作業を完遂できるだけの情報」を
 // すべて書き込む必要がある。LLMへのツール説明でそれを要求している。
-type TaskTool struct {
-	// newSubAgent はサブエージェントを作る関数。task ツールが呼ばれる
+type SubAgentTool struct {
+	// newSubAgent はサブエージェントを作る関数。agent ツールが呼ばれる
 	// たびに呼び、会話履歴が空の Agent を作る。
 	// どんなツール・権限を持たせるかは呼び出し側(main)が決める。
 	newSubAgent func() *Agent
 }
 
-// NewTaskTool は TaskTool を作る。
-// newSubAgent が返すエージェントには TaskTool 自身を含めないこと。
+// NewSubAgentTool は SubAgentTool を作る。
+// newSubAgent が返すエージェントには SubAgentTool 自身を含めないこと。
 // 含めると入れ子にできるが、この実装は入れ子の深さを数えないので含めない。
-func NewTaskTool(newSubAgent func() *Agent) *TaskTool {
-	return &TaskTool{newSubAgent: newSubAgent}
+func NewSubAgentTool(newSubAgent func() *Agent) *SubAgentTool {
+	return &SubAgentTool{newSubAgent: newSubAgent}
 }
 
-func (t *TaskTool) Name() string { return "task" }
+func (t *SubAgentTool) Name() string { return "agent" }
 
-func (t *TaskTool) Description() string {
+func (t *SubAgentTool) Description() string {
 	return "サブエージェントにタスクを委任します。複数ファイルにまたがる調査や検索など、" +
 		"途中経過よりも最終的な結論だけが欲しいタスクに使ってください。" +
 		"サブエージェントはこれまでの会話を一切知らないため、prompt には" +
 		"背景・対象・期待する出力形式など、単独で作業できるだけの情報をすべて含めてください。"
 }
 
-func (t *TaskTool) InputSchema() tools.Schema {
+func (t *SubAgentTool) InputSchema() tools.Schema {
 	return tools.Schema{
 		Properties: map[string]any{
 			"description": tools.StringProperty("タスクの短い説明(進捗表示用)。例: 認証処理の調査"),
@@ -57,7 +57,7 @@ func (t *TaskTool) InputSchema() tools.Schema {
 	}
 }
 
-func (t *TaskTool) Run(ctx context.Context, input json.RawMessage) (string, error) {
+func (t *SubAgentTool) Run(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
 		Description string `json:"description"`
 		Prompt      string `json:"prompt"`

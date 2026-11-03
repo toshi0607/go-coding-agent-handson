@@ -222,24 +222,24 @@ func TestToolUseStopReasonWithoutToolBlocks(t *testing.T) {
 	}
 }
 
-func TestTaskToolRunsSubAgent(t *testing.T) {
+func TestAgentToolRunsSubAgent(t *testing.T) {
 	// レスポンスは親→サブ→親の順に消費される:
-	//   1. 親: taskツールを呼ぶ
+	//   1. 親: agentツールを呼ぶ
 	//   2. サブ: 調査結果を返す(サブエージェントのターン)
 	//   3. 親: tool_result(=サブの結論)を受けて最終的なレスポンス
 	client := llm.NewReplayClient(
-		llm.ToolUseResponse("toolu_1", "task", `{"description":"調査","prompt":"認証処理の場所を調べて"}`),
+		llm.ToolUseResponse("toolu_1", "agent", `{"description":"調査","prompt":"認証処理の場所を調べて"}`),
 		llm.TextResponse("認証処理は auth/login.go にあります"),
 		llm.TextResponse("調査完了: auth/login.go を確認してください"),
 	)
 
-	taskTool := NewTaskTool(func() *Agent {
+	agentTool := NewSubAgentTool(func() *Agent {
 		return New(Config{Client: client, Model: "claude-opus-5-5"})
 	})
 	parent := New(Config{
 		Client: client, Model: "claude-opus-5-5",
-		Tools:      []tools.Tool{taskTool},
-		Permission: allowAll("task"),
+		Tools:      []tools.Tool{agentTool},
+		Permission: allowAll("agent"),
 	})
 
 	got, err := parent.Run(t.Context(), "認証処理どこ？")

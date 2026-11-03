@@ -71,7 +71,7 @@ func run(oneShot string) error {
 	}
 
 	// --- ツールの組み立て ---
-	// 組み込みツール + taskツール(サブエージェント)。
+	// 組み込みツール + agentツール(サブエージェント)。
 	baseTools := []tools.Tool{
 		tools.NewReadFile(ws),
 		tools.NewListFiles(ws),
@@ -93,7 +93,7 @@ func run(oneShot string) error {
 				"list_files": permission.Allow,
 				// サブエージェント起動自体は安全。サブエージェントが使う
 				// 個々のツールは、そのつど同じ承認フローを通る。
-				"task": permission.Allow,
+				"agent": permission.Allow,
 			},
 			BashAllowlist: settings.BashAllowlist,
 			Ask:           ask,
@@ -122,11 +122,11 @@ func run(oneShot string) error {
 
 	// --- サブエージェントの組み立て ---
 	// 親と同じツールを持つが、
-	//   - taskツールは持たない(入れ子を1階層に限る)
+	//   - agentツールは持たない(入れ子を1階層に限る)
 	//   - 出力は捨てる(親の表示を汚さない)
 	//   - 承認の質問に出所を付ける
 	// という3点だけが異なる。
-	taskTool := agent.NewTaskTool(func() *agent.Agent {
+	agentTool := agent.NewSubAgentTool(func() *agent.Agent {
 		return agent.New(agent.Config{
 			Client:       client,
 			Model:        model,
@@ -141,12 +141,12 @@ func run(oneShot string) error {
 		Client:       client,
 		Model:        model,
 		SystemPrompt: systemPrompt,
-		// append(baseTools, taskTool) と書いてはいけない。baseTools に
+		// append(baseTools, agentTool) と書いてはいけない。baseTools に
 		// 容量の余りがあると、追記先が上のクロージャが参照している
 		// 配列そのものになりうる。今は実害がなくても、あとから
 		// 要素を足したときに黙って壊れる類のバグなので、
 		// 新しいスライスを作る slices.Concat を使う。
-		Tools:      slices.Concat(baseTools, []tools.Tool{taskTool}),
+		Tools:      slices.Concat(baseTools, []tools.Tool{agentTool}),
 		Permission: checker,
 		Out:        os.Stdout,
 	})

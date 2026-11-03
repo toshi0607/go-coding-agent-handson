@@ -2,7 +2,7 @@
 
 まず自力で書いてみてください。ヒントは段階式です。
 
-## 課題1: TODO(step07-1) TaskTool.Run
+## 課題1: TODO(step07-1) SubAgentTool.Run
 
 ### ヒント1
 
@@ -16,4 +16,4 @@
 
 ## 答え合わせ
 
-解答は次のstepの同じファイル([../08-mcp/agent/task_tool.go](../08-mcp/agent/task_tool.go))に埋まっています。
+解答は次のstepの同じファイル([../08-mcp/agent/subagent_tool.go](../08-mcp/agent/subagent_tool.go))に埋まっています。
