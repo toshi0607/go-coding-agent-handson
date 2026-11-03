@@ -15,7 +15,6 @@ package agent
 import (
 	"context"
 	"fmt"
-	"slices"
 	"strings"
 
 	"github.com/anthropics/anthropic-sdk-go"
@@ -76,12 +75,14 @@ func (a *Agent) Compact(ctx context.Context) error {
 
 	params := a.buildParams()
 	params.MaxTokens = summaryMaxTokens
-	// a.history と配列を共有したまま append すると履歴を
-	// 破壊しうるので、必ず複製してから足す。
+	// params.Messages は a.history と配列を共有しているので、append は
+	// a.history の配列の空き(長さより後ろ)に書き込むことがある。
+	// a.history の長さは変わらず、成功すれば直後に丸ごと置き換えるので、
+	// 会話履歴は壊れない。
 	// ツールループの途中で呼ばれたときは、履歴が tool_result の
 	// userメッセージで終わっているので、userメッセージが2つ続く。
 	// Messages APIは同じroleの連続したメッセージを1つにまとめて扱う。
-	params.Messages = append(slices.Clone(params.Messages),
+	params.Messages = append(params.Messages,
 		anthropic.NewUserMessage(anthropic.NewTextBlock(summaryPrompt)))
 	// tools を渡す以上、LLMは要約の代わりにツールを呼ぶ選択もできてしまう。
 	// ここで欲しいのはテキストの要約だけなので、tool_choice で封じる。
