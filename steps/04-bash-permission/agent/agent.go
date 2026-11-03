@@ -186,7 +186,7 @@ func (a *Agent) executeTool(ctx context.Context, block anthropic.ContentBlockUni
 		return anthropic.NewToolResultBlock(block.ID, fmt.Sprintf("ツール %s は存在しません", block.Name), true)
 	}
 
-	// TODO(step04-5): ツールを実行する「前」に権限チェックを差し込む。
+	// TODO(step04-3): ツールを実行する「前」に権限チェックを差し込む。
 	//
 	// a.perm.Check(block.Name, block.Input) がエラーを返したら、ツールを
 	// 実行せずに、そのエラーを is_error 付きの tool_result として返す。

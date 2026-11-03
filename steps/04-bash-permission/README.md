@@ -75,9 +75,9 @@ read_file は「読むだけだから安全」に見えます。しかし考え�
 
 1. **TODO(step04-1)** [permission/permission.go](permission/permission.go) — `isSimpleCommand`(ホワイトリスト判定)
 2. **TODO(step04-2)** 同 — `checkBash`(判定の順序: 単純さ → allowlist → 確認)
-3. **TODO(step04-3)** [tools/workspace.go](tools/workspace.go) — `Resolve`(組み立て → 正規化 → リンク解決 → 判定)
-4. **TODO(step04-4)** 同 — `contains`(前方一致の罠に注意)
-5. **TODO(step04-5)** [agent/agent.go](agent/agent.go) — 権限チェックの挿入(位置と、拒否の返し方)
+3. **TODO(step04-3)** [agent/agent.go](agent/agent.go) — 権限チェックの挿入(位置と、拒否の返し方)
+4. **TODO(step04-4)** [tools/workspace.go](tools/workspace.go) — `Resolve`(組み立て → 正規化 → リンク解決 → 判定)
+5. **TODO(step04-5)** 同 — `contains`(前方一致の罠に注意)
 
 ## 検証
 

@@ -1,6 +1,6 @@
 # step 04 ヒント
 
-まず自力で書いてみてください。ヒントは段階式です。課題は 04-1 → 04-2 → 04-5 → 04-4 → 04-3 の順に進めると、テストの失敗が1つずつ減っていきます。
+まず自力で書いてみてください。ヒントは段階式です。課題は 04-1 から番号の順に進めてください。`tools` のテストは 04-4 と 04-5 の両方を埋めると通ります。
 
 ## 課題1: TODO(step04-1) isSimpleCommand
 
@@ -38,13 +38,29 @@ func isSimpleCommand(command string) bool {
 - それ以外: `c.confirm(質問文, "bash:"+head, "コマンド")`
 - 質問文にはコマンド文字列そのものを含めます(例: `fmt.Sprintf("コマンドの実行を許可しますか？\n  $ %s", in.Command)`)
 
-## 課題3: TODO(step04-5) 権限チェックの挿入(agent/agent.go)
+## 課題3: TODO(step04-3) 権限チェックの挿入(agent/agent.go)
 
 ### ヒント1
 
 場所は「ツールの解決後、`tool.Run` の前」。`a.perm.Check(block.Name, block.Input)` がエラーを返したら、`anthropic.NewToolResultBlock(block.ID, err.Error(), true)` を返します(true = is_error)。`executeTool` 内の他のエラー処理と同じ形です。
 
-## 課題4: TODO(step04-4) contains
+## 課題4: TODO(step04-4) Resolve
+
+### ヒント1
+
+手順はTODOコメントの4段階そのままです。
+
+```go
+abs := path
+if !filepath.IsAbs(abs) {
+	abs = filepath.Join(w.root, abs)
+}
+abs = filepath.Clean(abs)
+```
+
+そのあと `evalSymlinksLenient(abs)` を呼び、エラーはそのまま返します。最後に `w.contains(resolved)` が false なら、「どのパスが作業ディレクトリ(w.root)の外か」が分かるエラーを返します。
+
+## 課題5: TODO(step04-5) contains
 
 ### ヒント1
 
@@ -60,22 +76,6 @@ if err != nil {
 ```
 
 のあと、`rel == "."` は true、`rel == ".."` は false、`strings.HasPrefix(rel, ".."+string(filepath.Separator))` も false。それ以外は true です。`strings` の import を忘れずに。
-
-## 課題5: TODO(step04-3) Resolve
-
-### ヒント1
-
-手順はTODOコメントの4段階そのままです。
-
-```go
-abs := path
-if !filepath.IsAbs(abs) {
-	abs = filepath.Join(w.root, abs)
-}
-abs = filepath.Clean(abs)
-```
-
-そのあと `evalSymlinksLenient(abs)` を呼び、エラーはそのまま返します。最後に `w.contains(resolved)` が false なら、「どのパスが作業ディレクトリ(w.root)の外か」が分かるエラーを返します。
 
 ## 答え合わせ
 
