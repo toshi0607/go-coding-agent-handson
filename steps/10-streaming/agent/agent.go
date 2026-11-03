@@ -243,7 +243,7 @@ func (a *Agent) executeTool(ctx context.Context, block anthropic.ContentBlockUni
 	// といった正常なケースで起こる。
 	// 個々のツールに任せず1箇所で処理するのは、権限チェックと同じ理由。
 	if result == "" {
-		result = "(出力は空です)"
+		result = "(ツールの出力は空です)"
 	}
 
 	result = truncateToolResult(result, a.maxToolResultChars)

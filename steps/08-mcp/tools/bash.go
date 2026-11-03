@@ -91,8 +91,5 @@ func (b *Bash) Run(ctx context.Context, input json.RawMessage) (string, error) {
 		// LLMはエラー出力を読んで次の一手を考えるので、出力こそが本体。
 		return "", fmt.Errorf("コマンドが失敗しました (%v):\n%s", err, output)
 	}
-	if len(output) == 0 {
-		return "(出力なし)", nil
-	}
 	return string(output), nil
 }
