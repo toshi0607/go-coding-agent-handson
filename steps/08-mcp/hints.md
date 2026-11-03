@@ -9,11 +9,11 @@
 `c.session.Tools(ctx, nil)` は `iter.Seq2[*sdk.Tool, error]` を返します。Go 1.23 から使える range over func で、そのまま `for range` で回せます。
 
 ```go
-for info, err := range c.session.Tools(ctx, nil) {
+for tool, err := range c.session.Tools(ctx, nil) {
 	if err != nil {
 		// どのサーバーの一覧が取れなかったか分かるエラー
 	}
-	// info.Name, info.Description, info.InputSchema
+	// tool.Name, tool.Description, tool.InputSchema
 }
 ```
 
@@ -21,8 +21,8 @@ for info, err := range c.session.Tools(ctx, nil) {
 
 1件ごとの処理:
 
-1. `toSchema(info.InputSchema)` で `tools.Schema` に写す。失敗したらエラー
-2. `&Tool{client: c, name: info.Name, description: info.Description, schema: schema}` を結果のスライスに追加する
+1. `toSchema(tool.InputSchema)` で `tools.Schema` に写す。失敗したらエラー
+2. `&Tool{client: c, name: tool.Name, description: tool.Description, schema: schema}` を `serverTools` に追加する
 
 ループの前に `ctx, cancel := context.WithTimeout(ctx, callTimeout)` と `defer cancel()` を置きます。
 
