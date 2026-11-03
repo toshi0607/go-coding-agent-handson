@@ -30,23 +30,23 @@ func (c *Client) Tools(ctx context.Context) ([]tools.Tool, error) {
 
 	// session.Tools は tools/list を呼び、一覧がページに分かれていれば
 	// 続きも取りながら1件ずつ返すイテレーター。
-	var result []tools.Tool
-	for info, err := range c.session.Tools(ctx, nil) {
+	var serverTools []tools.Tool
+	for tool, err := range c.session.Tools(ctx, nil) {
 		if err != nil {
 			return nil, fmt.Errorf("MCPサーバー %s のツール一覧を取得できませんでした: %w", c.serverName, err)
 		}
-		schema, err := toSchema(info.InputSchema)
+		schema, err := toSchema(tool.InputSchema)
 		if err != nil {
-			return nil, fmt.Errorf("MCPツール %s のスキーマを読み取れませんでした: %w", info.Name, err)
+			return nil, fmt.Errorf("MCPツール %s のスキーマを読み取れませんでした: %w", tool.Name, err)
 		}
-		result = append(result, &Tool{
+		serverTools = append(serverTools, &Tool{
 			client:      c,
-			name:        info.Name,
-			description: info.Description,
+			name:        tool.Name,
+			description: tool.Description,
 			schema:      schema,
 		})
 	}
-	return result, nil
+	return serverTools, nil
 }
 
 // toSchema はMCPの inputSchema(JSON Schema)から properties と required を

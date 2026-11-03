@@ -35,7 +35,7 @@ func (c *Client) Tools(ctx context.Context) ([]tools.Tool, error) {
 	//    err が入っていたら、どのサーバーの一覧が取れなかったか分かる
 	//    エラーを返す
 	//  - 各ツールの InputSchema は toSchema(実装済み)で tools.Schema に写す
-	//  - *Tool の name にはサーバー上の名前(info.Name)をそのまま入れる。
+	//  - *Tool の name にはサーバー上の名前(tool.Name)をそのまま入れる。
 	//    "mcp__サーバー名__" の接頭辞は Name() が付ける
 	panic("TODO(step08-1): steps/08-mcp/mcp/tool.go を実装してください(hints.md 参照)")
 }
