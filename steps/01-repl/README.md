@@ -53,7 +53,7 @@ type Client interface {
 - `AnthropicClient` — 本物。anthropic-sdk-go で実APIを呼びます
 - `ReplayClient` — テスト用。あらかじめ用意したレスポンスJSONを順番に再生します
 
-`ReplayClient` が保持するのはMessages APIのワイヤーフォーマット(実際にHTTPで返ってくるJSON)そのものです。SDKの `Message` 型は内部にJSONメタデータを持っていて、構造体リテラルで組み立てると `ToParam()` などが正しく動きません。「本物と同じJSONをUnmarshalする」ことで、本物と同じ挙動を再現しています。この仕組みのおかげで、**本書のすべての検証テストはAPIキーなしで動きます**。
+`ReplayClient` が保持するのはMessages APIのワイヤーフォーマット(実際にHTTPで返ってくるJSON)そのものです。SDKの `Message` 型は、APIから受け取ったJSONの文字列を非公開のフィールドに保存していて、`ToParam()` はそのJSONを読み直してリクエスト用の型を作ります。そのため、構造体リテラルで組み立てた `Message` では、`ToParam()` が空のテキストを返します。「本物と同じJSONをUnmarshalする」ことで、本物と同じ挙動を再現しています。この仕組みのおかげで、**本書のすべての検証テストはAPIキーなしで動きます**。
 
 リクエスト/レスポンスの型にSDKの型をそのまま使っているのも意図的です。独自型に包むと「Messages APIが実際どういう形をしているか」が見えなくなってしまうため、教材としてはあえて生のまま扱います。
 
