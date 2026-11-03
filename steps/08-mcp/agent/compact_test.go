@@ -110,3 +110,27 @@ func TestCompactKeepsHistoryWhenSummaryIsEmpty(t *testing.T) {
 		t.Errorf("会話履歴が置き換えられた: %d件", n)
 	}
 }
+
+// 自動compactionの要約に失敗しても、会話履歴を残したままターンを続けること。
+// 失敗のたびにターンを止めると、次のターンも閾値を超えたまま要約に失敗し、
+// ユーザーは会話を先に進められなくなる。
+func TestRunContinuesWhenCompactionFails(t *testing.T) {
+	client := llm.NewReplayClient(llm.TextResponse(""), llm.TextResponse("答えです"))
+	a := New(Config{Client: client, Model: "claude-opus-5-5", CompactThreshold: 1})
+	a.history = []anthropic.MessageParam{
+		anthropic.NewUserMessage(anthropic.NewTextBlock("REPLを実装して")),
+		anthropic.NewAssistantMessage(anthropic.NewTextBlock("実装しました")),
+	}
+	a.lastUsageTokens = 2
+
+	got, err := a.Run(t.Context(), "次は？")
+	if err != nil {
+		t.Fatalf("要約に失敗してもターンは続くはず: %v", err)
+	}
+	if got != "答えです" {
+		t.Errorf("ターンの応答: %q", got)
+	}
+	if n := len(a.History()); n != 4 {
+		t.Errorf("会話履歴は元の2件と今回の2件のはず: %d件", n)
+	}
+}

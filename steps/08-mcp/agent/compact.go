@@ -40,6 +40,25 @@ func (a *Agent) shouldCompact() bool {
 	return a.lastUsageTokens > a.compactThreshold
 }
 
+// compactIfNeeded は、閾値を超えていれば会話履歴を要約に置き換える。
+//
+// 要約に失敗しても、会話履歴はそのまま残っているので、警告を表示して
+// ターンを続ける。失敗のたびにターンを止めると、次のターンも閾値を
+// 超えたまま要約に失敗し、ユーザーは会話を先に進められなくなる。
+// Ctrl-C でキャンセルされたときだけエラーを返す。
+func (a *Agent) compactIfNeeded(ctx context.Context) error {
+	if !a.shouldCompact() {
+		return nil
+	}
+	if err := a.Compact(ctx); err != nil {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		fmt.Fprintf(a.out, "  ⨯ %v。圧縮せずに続けます\n", err)
+	}
+	return nil
+}
+
 const summaryPrompt = `これまでの会話を、この続きから作業を再開するために必要な情報だけに要約してください。以下を必ず含めること:
 - ユーザーの依頼内容と現在の進捗
 - 判明した重要な事実(ファイルパス、コードの構造、エラーの内容など)

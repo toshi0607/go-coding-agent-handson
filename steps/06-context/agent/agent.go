@@ -127,9 +127,9 @@ func New(cfg Config) *Agent {
 func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 	// TODO(step06-2): 自動compactionを発動させる(2か所。1か所目はここ)。
 	//
-	// 直近のトークン使用量(a.lastUsageTokens)が閾値を超えていたら
-	// (a.shouldCompact)、履歴を圧縮する(a.Compact。
-	// エラーはそのまま返してよい)。
+	// a.compactIfNeeded を呼ぶ。直近のトークン使用量(a.lastUsageTokens)が
+	// 閾値を超えていれば(a.shouldCompact)、履歴を圧縮する(a.Compact)。
+	// 返ってきたエラー(Ctrl-C のときだけ)は、そのまま返してよい。
 	//
 	// このstepの主題は「圧縮のコードを書くこと」ではなく「どこで
 	// 圧縮するか」である。圧縮してよいのは tool_use と tool_result の

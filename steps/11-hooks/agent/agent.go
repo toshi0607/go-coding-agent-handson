@@ -139,10 +139,8 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 	// 要約すると、要約リクエストの履歴に tool_result のない tool_use が残り、
 	// APIに拒否される。対応が閉じている地点は2つあり、1つ目がここ、
 	// ユーザー入力を履歴に足す前のターンの開始時である。
-	if a.shouldCompact() {
-		if err := a.Compact(ctx); err != nil {
-			return "", err
-		}
+	if err := a.compactIfNeeded(ctx); err != nil {
+		return "", err
 	}
 
 	a.history = append(a.history, anthropic.NewUserMessage(anthropic.NewTextBlock(userInput)))
@@ -218,10 +216,8 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 		// 判定する。ただし a.lastUsageTokens は直前のレスポンスのトークン数で、
 		// いま足した tool_result の分は含まない。閾値を上限より手前に置くのは
 		// このためでもある。
-		if a.shouldCompact() {
-			if err := a.Compact(ctx); err != nil {
-				return "", err
-			}
+		if err := a.compactIfNeeded(ctx); err != nil {
+			return "", err
 		}
 	}
 

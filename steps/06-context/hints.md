@@ -34,10 +34,8 @@ return head, total
 ### ヒント1
 
 ```go
-if a.shouldCompact() {
-	if err := a.Compact(ctx); err != nil {
-		return "", err
-	}
+if err := a.compactIfNeeded(ctx); err != nil {
+	return "", err
 }
 ```
 
