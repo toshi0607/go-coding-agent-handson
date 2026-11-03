@@ -36,7 +36,7 @@ func isSimpleCommand(command string) bool {
 - 単純でない場合: `c.confirm(質問文, "", "コマンド")`(sessionKey は空 = 「a」でも記憶しない)
 - 単純な場合: `head := commandHead(in.Command)` を取り、`c.bashAllowlist[head] || c.sessionAllowed["bash:"+head]` なら `nil` を返す
 - それ以外: `c.confirm(質問文, "bash:"+head, "コマンド")`
-- 質問文にはコマンド文字列そのものを含めます(例: `fmt.Sprintf("コマンドの実行を許可しますか?\n  $ %s", in.Command)`)
+- 質問文にはコマンド文字列そのものを含めます(例: `fmt.Sprintf("コマンドの実行を許可しますか？\n  $ %s", in.Command)`)
 
 ## 課題3: TODO(step04-5) 権限チェックの挿入(agent/agent.go)
 

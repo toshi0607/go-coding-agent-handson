@@ -95,7 +95,7 @@ func (c *Checker) Check(toolName string, input json.RawMessage) error {
 		if c.sessionAllowed[toolName] {
 			return nil
 		}
-		question := fmt.Sprintf("ツール %s の実行を許可しますか?\n  入力: %s", toolName, summarize(input))
+		question := fmt.Sprintf("ツール %s の実行を許可しますか？\n  入力: %s", toolName, summarize(input))
 		return c.confirm(question, toolName, "操作")
 	}
 }
@@ -121,14 +121,14 @@ func (c *Checker) checkBash(input json.RawMessage) error {
 	// (許可リスト)にする。1コマンド・1行・英数字と一部の記号だけ。
 	// それ以外は先頭単語が何であれユーザー確認に回す。
 	if !isSimpleCommand(in.Command) {
-		question := fmt.Sprintf("英数字と一部の記号以外を含むコマンドの実行を許可しますか?\n  $ %s", in.Command)
+		question := fmt.Sprintf("英数字と一部の記号以外を含むコマンドの実行を許可しますか？\n  $ %s", in.Command)
 		return c.confirm(question, "", "コマンド")
 	}
 
 	if c.bashAllowlist[head] || c.sessionAllowed["bash:"+head] {
 		return nil
 	}
-	question := fmt.Sprintf("コマンドの実行を許可しますか?\n  $ %s", in.Command)
+	question := fmt.Sprintf("コマンドの実行を許可しますか？\n  $ %s", in.Command)
 	return c.confirm(question, "bash:"+head, "コマンド")
 }
 

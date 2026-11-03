@@ -94,7 +94,7 @@ func (c *Checker) Check(toolName string, input json.RawMessage) error {
 		if c.sessionAllowed[toolName] {
 			return nil
 		}
-		question := fmt.Sprintf("ツール %s の実行を許可しますか?\n  入力: %s", toolName, summarize(input))
+		question := fmt.Sprintf("ツール %s の実行を許可しますか？\n  入力: %s", toolName, summarize(input))
 		return c.confirm(question, toolName, "操作")
 	}
 }
