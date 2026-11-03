@@ -163,7 +163,7 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 		// あり、しかも max_tokens では tool_use ブロックが生成途中で
 		// 切れていることがある。そのレスポンスをそのまま「ターン終了」として
 		// 履歴に残すと、tool_use に対応する tool_result が永久に足されず、
-		// 以降のリクエストがすべてAPIに拒否される——会話が死ぬ。
+		// 会話履歴を消すまで以降のリクエストがすべてAPIに拒否される。
 		//
 		// そのため判定は「stop_reason」ではなく「未処理のtool_useが
 		// 残っているか」を基準にし、stop_reason は続行の可否に使う。

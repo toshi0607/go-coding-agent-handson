@@ -139,7 +139,7 @@ func TestStreamWithoutCallback(t *testing.T) {
 
 // ストリームの途中で切れた場合にエラーを返すこと。
 // 途中まで組み立てたメッセージを「完成品」として返してしまうと、
-// 壊れた履歴が足されて以降のリクエストが通らなくなる。
+// 壊れた履歴が足されて、履歴を消すまで以降のリクエストが通らなくなる。
 func TestStreamReportsServerError(t *testing.T) {
 	client := newSSEClient(t, []string{
 		sse("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5-5","content":[],"stop_reason":null,"usage":{"input_tokens":1,"output_tokens":0}}}`),
