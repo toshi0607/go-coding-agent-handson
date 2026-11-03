@@ -45,16 +45,19 @@ func (a *Agent) shouldCompact() bool {
 // 要約に失敗しても、会話履歴はそのまま残っているので、警告を表示して
 // ターンを続ける。失敗のたびにターンを止めると、次のターンも閾値を
 // 超えたまま要約に失敗し、ユーザーは会話を先に進められなくなる。
-// Ctrl-C でキャンセルされたときだけエラーを返す。
+// 失敗したターンの残りでは試し直さず、次のターンの冒頭で試し直す。
+// 閾値を超えたままなので、試し直すとツールを呼ぶたびに要約の
+// リクエストが増える。Ctrl-C でキャンセルされたときだけエラーを返す。
 func (a *Agent) compactIfNeeded(ctx context.Context) error {
-	if !a.shouldCompact() {
+	if a.compactFailed || !a.shouldCompact() {
 		return nil
 	}
 	if err := a.Compact(ctx); err != nil {
 		if ctx.Err() != nil {
 			return ctx.Err()
 		}
-		fmt.Fprintf(a.out, "  ⨯ %v。圧縮せずに続けます\n", err)
+		fmt.Fprintf(a.out, "  ⨯ %v。このターンは圧縮せずに続けます\n", err)
+		a.compactFailed = true
 	}
 	return nil
 }

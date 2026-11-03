@@ -80,6 +80,10 @@ type Agent struct {
 	// lastUsageTokens は直近のAPIレスポンスのトークン使用量
 	// (入力+出力)。compaction判定に使う。
 	lastUsageTokens int
+
+	// compactFailed は、このターンで自動compactionの要約に失敗したか。
+	// 失敗したターンの残りでは要約を試し直さない(compactIfNeeded)。
+	compactFailed bool
 }
 
 // New はエージェントを作る。
@@ -125,6 +129,8 @@ func New(cfg Config) *Agent {
 // Run は1ユーザーターンを処理する。ツール実行を挟みながらLLMとの
 // 往復を繰り返し、最終的なテキストのレスポンスを返す。
 func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
+	a.compactFailed = false
+
 	// compactionは、tool_use と tool_result の対応が閉じている地点でだけ行う。
 	// ツールを呼んだレスポンスを履歴に足した直後(tool_result を足す前)に
 	// 要約すると、要約リクエストの履歴に tool_result のない tool_use が残り、
