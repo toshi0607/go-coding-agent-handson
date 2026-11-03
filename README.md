@@ -17,7 +17,8 @@ steps/          穴埋め式の段階実装(本のPart 1に対応。下の「進
 ├── 07-subagent/         サブエージェント(taskツール)
 ├── 08-mcp/              MCPクライアント(公式Go SDK、stdio transport)
 ├── 09-commands-skills/  スラッシュコマンドとスキル
-└── 10-streaming-hooks/  ストリーミングとhooks
+├── 10-streaming/        ストリーミング
+└── 11-hooks/            hooks(PreToolUse / PostToolUse)
 final/          完成形のミニコーディングエージェント
 ├── main.go       部品の組み立てとREPL
 ├── agent/        エージェントループ本体 + サブエージェント(taskツール) + compaction・ツール結果の切り詰め
@@ -52,7 +53,7 @@ make check STEP=01
 
 4. テストが通ったら次のstepへ。詰まったら各stepの `hints.md`(段階ヒント)へ
 
-解答は次のstepの同じファイルに埋まっています(step 10 の解答は `final/` そのものです)。ズルではなく答え合わせとして、埋めたあとに読み比べるのがおすすめです。
+解答は次のstepの同じファイルに埋まっています(step 11 の解答は `final/` そのものです)。ズルではなく答え合わせとして、埋めたあとに読み比べるのがおすすめです。
 
 steps/ のテストは `make check STEP=NN` 経由でだけ実行されます(環境変数 `AGENT_STEP_CHECK` でゲートしています)。穴あきのstepがあっても、リポジトリ全体の `go test ./...` は通ります。
 
@@ -68,7 +69,7 @@ go run ../final
 ```
 
 ```
-> このディレクトリに何がある?
+> このディレクトリに何がある？
 > hello/main.go を読んで、バグがあれば直して
 > /help
 ```
@@ -160,7 +161,7 @@ LLM呼び出しはインターフェース化されており、テストは録�
 make check   # go build + go vet + go test
 ```
 
-`steps/` のテストは `make check STEP=NN` でのみ走るため、穴あきのstepがあっても上のコマンドは通ります。教材そのものが壊れていないか(各stepが穴あき状態で「ビルドは通るがテストは落ちる」こと、step 10 の中身が `final/` と一致していること)は別のコマンドで検査します。
+`steps/` のテストは `make check STEP=NN` でのみ走るため、穴あきのstepがあっても上のコマンドは通ります。教材そのものが壊れていないか(各stepが穴あき状態で「ビルドは通るがテストは落ちる」こと、step 11 の中身が `final/` と一致していること)は別のコマンドで検査します。
 
 ```bash
 make check-steps   # 全stepを検査するため1分ほどかかります

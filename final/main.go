@@ -225,12 +225,11 @@ func repl(ctx context.Context, a *agent.Agent, commands *command.Registry, stdin
 			continue
 		}
 
-		if commands.IsCommand(input) {
-			result := commands.Execute(input)
-			if result.Clear {
+		if result, ok := commands.Execute(input); ok {
+			switch {
+			case result.Clear:
 				a.ClearHistory()
-			}
-			if result.Compact {
+			case result.Compact:
 				if err := a.Compact(ctx); err != nil {
 					fmt.Println("エラー:", err)
 					continue
@@ -282,7 +281,7 @@ func confirmTrust(workDir string, executables []config.Executable, ask permissio
 	for _, e := range executables {
 		fmt.Fprintf(&b, "  - %s\n      %s\n", e.Source, e.Command)
 	}
-	b.WriteString("内容を確認しました。このディレクトリの設定を信頼して起動しますか?")
+	b.WriteString("内容を確認しました。このディレクトリの設定を信頼して起動しますか？")
 
 	answer, err := ask(b.String())
 	if err != nil {

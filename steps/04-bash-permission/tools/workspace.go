@@ -84,7 +84,7 @@ func (w *Workspace) Resolve(path string) (string, error) {
 		path = "."
 	}
 
-	// TODO(step04-3): パスの検証と解決を実装する。手順:
+	// TODO(step04-4): パスの検証と解決を実装する。手順:
 	//
 	//  1. 相対パスは作業ディレクトリ(w.root)基準の絶対パスにする
 	//     (filepath.IsAbs / filepath.Join)。絶対パスもここでは弾かず、
@@ -96,12 +96,12 @@ func (w *Workspace) Resolve(path string) (string, error) {
 	//     文字列処理とファイルシステムへの問い合わせの違いは README を参照
 	//  4. 解決後のパスが作業ディレクトリの内側か contains で判定し、
 	//     外なら「どのパスが、なぜダメか」が分かるエラーを返す
-	panic("TODO(step04-3): steps/04-bash-permission/tools/workspace.go を実装してください(hints.md 参照)")
+	panic("TODO(step04-4): steps/04-bash-permission/tools/workspace.go を実装してください(hints.md 参照)")
 }
 
 // contains は path が作業ディレクトリの内側かを判定する。
 //
-// TODO(step04-4): 実装する。
+// TODO(step04-5): 実装する。
 //
 // 真っ先に思いつくのは strings.HasPrefix(path, w.root) だが、これは
 // 不十分である。root が "/home/me/app" のとき "/home/me/app-secrets" が
@@ -113,7 +113,7 @@ func (w *Workspace) Resolve(path string) (string, error) {
 // 区切り文字の扱いも特殊ケースもまとめて正しく処理できる。
 // 「rel がどんな値なら外側と言えるか」を考えること。
 func (w *Workspace) contains(path string) bool {
-	panic("TODO(step04-4): steps/04-bash-permission/tools/workspace.go を実装してください(hints.md 参照)")
+	panic("TODO(step04-5): steps/04-bash-permission/tools/workspace.go を実装してください(hints.md 参照)")
 }
 
 // maxSymlinkHops は壊れたシンボリックリンクを辿る回数の上限。

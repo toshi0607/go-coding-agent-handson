@@ -234,7 +234,7 @@ func confirmTrust(workDir string, executables []config.Executable, ask permissio
 	for _, e := range executables {
 		fmt.Fprintf(&b, "  - %s\n      %s\n", e.Source, e.Command)
 	}
-	b.WriteString("内容を確認しました。このディレクトリの設定を信頼して起動しますか?")
+	b.WriteString("内容を確認しました。このディレクトリの設定を信頼して起動しますか？")
 
 	answer, err := ask(b.String())
 	if err != nil {

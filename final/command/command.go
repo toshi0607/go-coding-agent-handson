@@ -17,6 +17,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -64,23 +65,12 @@ func New(ws *tools.Workspace) *Registry {
 	return &Registry{ws: ws}
 }
 
-// IsCommand は入力がスラッシュコマンドかどうかを判定する。
+// validName はコマンド名として許可する形。英数字と - _ だけの1文字以上の文字列。
 //
-// 「/ で始まる」だけでは足りない。ユーザーは
-//
-//	/Users/foo/main.go を読んで
-//
-// のように、絶対パスから始まる依頼を書くことがある。これをスラッシュ
-// コマンドとして扱うと「スラッシュコマンド /Users/foo/main.go は存在しません」
-// と表示されて依頼がLLMに届かない。名前として妥当かどうかまで見る。
-func (r *Registry) IsCommand(line string) bool {
-	line = strings.TrimSpace(line)
-	if !strings.HasPrefix(line, "/") {
-		return false
-	}
-	name, _, _ := strings.Cut(strings.TrimPrefix(line, "/"), " ")
-	return isValidName(name)
-}
+// Go の regexp は RE2 方式で、照合は入力の長さに比例する時間で終わる
+// (バックトラックで時間が爆発しない)ので、この判定に使ってよい。
+// コンパイルはパッケージ初期化時の1回だけにする。
+var validName = regexp.MustCompile(`^[A-Za-z0-9_-]+$`)
 
 // isValidName はコマンド名として許可する形を定める。
 //
@@ -90,54 +80,58 @@ func (r *Registry) IsCommand(line string) bool {
 // なく「安全な文字だけ通す」——ファイル操作の範囲を作業ディレクトリに限定する(tools.Workspace)と
 // 同じ考え方である。
 func isValidName(name string) bool {
-	if name == "" {
-		return false
-	}
-	for _, r := range name {
-		switch {
-		case r >= 'a' && r <= 'z', r >= 'A' && r <= 'Z', r >= '0' && r <= '9':
-		case r == '-', r == '_':
-		default:
-			return false
-		}
-	}
-	return true
+	return validName.MatchString(name)
 }
 
-// Execute はコマンドを実行する。
-func (r *Registry) Execute(line string) Result {
-	line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "/"))
-	name, args, _ := strings.Cut(line, " ")
+// Execute は入力がスラッシュコマンドなら実行して、結果と true を返す。
+// スラッシュコマンドでなければゼロ値の Result と false を返すので、
+// 呼び出し側はその入力を通常の依頼としてLLMに渡す。
+//
+// 「/ で始まる」だけでは足りない。ユーザーは
+//
+//	/Users/foo/main.go を読んで
+//
+// のように、絶対パスから始まる依頼を書くことがある。これをスラッシュ
+// コマンドとして扱うと「スラッシュコマンド /Users/foo/main.go は存在しません」
+// と表示されて依頼がLLMに届かない。そこで / の後ろ(最初の空白まで)が
+// コマンド名として妥当かどうかまで見て、妥当でなければスラッシュコマンド
+// ではないと判断する。
+//
+// 判定と実行の入口をこの1つにまとめているので、名前の検証(isValidName)は
+// パスを組み立てる前に必ず1回だけ通る。判定と実行が別々のメソッドだと、
+// 判定を呼ばずに実行だけを呼ぶ経路で検証が抜けうる。
+func (r *Registry) Execute(line string) (Result, bool) {
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, "/") {
+		return Result{}, false
+	}
+	name, args, _ := strings.Cut(strings.TrimPrefix(line, "/"), " ")
+	if !isValidName(name) {
+		return Result{}, false
+	}
 
 	switch name {
 	case "help":
-		return Result{Output: r.helpText()}
+		return Result{Output: r.helpText()}, true
 	case "clear":
-		return Result{Clear: true, Output: "会話履歴をクリアしました。"}
+		return Result{Clear: true, Output: "会話履歴をクリアしました。"}, true
 	case "compact":
-		return Result{Compact: true}
-	}
-
-	// IsCommand で弾いているはずだが、Execute だけを呼ばれても
-	// 安全であるようにここでも検証する。パスを組み立てる直前が、
-	// 検証を置くべき場所である。
-	if !isValidName(name) {
-		return Result{Output: fmt.Sprintf("スラッシュコマンドの名前に使えない文字が含まれています: /%s", name)}
+		return Result{Compact: true}, true
 	}
 
 	// 組み込みになければカスタムコマンドを探す。
 	// パスは必ず Workspace 経由で解決する(上の ws のコメントを参照)。
 	path, err := r.ws.Resolve(filepath.Join(CommandsDir, name+".md"))
 	if err != nil {
-		return Result{Output: fmt.Sprintf("スラッシュコマンド /%s は読み込めません: %v", name, err)}
+		return Result{Output: fmt.Sprintf("スラッシュコマンド /%s は読み込めません: %v", name, err)}, true
 	}
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return Result{Output: fmt.Sprintf("スラッシュコマンド /%s は存在しません。/help で一覧を確認できます。", name)}
+		return Result{Output: fmt.Sprintf("スラッシュコマンド /%s は存在しません。/help で一覧を確認できます。", name)}, true
 	}
 	// $ARGUMENTS をコマンドの引数部分で置き換えてプロンプトにする。
 	prompt := strings.ReplaceAll(string(content), argumentsPlaceholder, strings.TrimSpace(args))
-	return Result{Prompt: prompt}
+	return Result{Prompt: prompt}, true
 }
 
 func (r *Registry) helpText() string {

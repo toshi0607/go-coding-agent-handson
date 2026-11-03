@@ -134,10 +134,11 @@ func New(cfg Config) *Agent {
 // Run は1ユーザーターンを処理する。ツール実行を挟みながらLLMとの
 // 往復を繰り返し、最終的なテキストのレスポンスを返す。
 func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
-	// compactionはターンの開始時、つまり会話が一区切りついた地点で行う。
-	// ツールループの途中で履歴を要約すると、tool_use と tool_result の
-	// 対応が壊れてAPIエラーになるため、「どこでcompactするか」は
-	// 見た目以上に重要な判断である。
+	// compactionは、tool_use と tool_result の対応が閉じている地点でだけ行う。
+	// ツールを呼んだレスポンスを履歴に足した直後(tool_result を足す前)に
+	// 要約すると、要約リクエストの履歴に tool_result のない tool_use が残り、
+	// APIに拒否される。対応が閉じている地点は2つあり、1つ目がここ、
+	// ユーザー入力を履歴に足す前のターンの開始時である。
 	if a.shouldCompact() {
 		if err := a.Compact(ctx); err != nil {
 			return "", err
@@ -210,6 +211,18 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 			results = append(results, a.executeTool(ctx, block))
 		}
 		a.history = append(a.history, anthropic.NewUserMessage(results...))
+
+		// compactionの2つ目の地点は、tool_result を履歴に足した直後である。
+		// ここでも tool_use と tool_result の対応は閉じている。ツールの結果が
+		// 大きいと1ターンの中でも履歴が膨らむので、ターンの終わりを待たずに
+		// 判定する。ただし a.lastUsageTokens は直前のレスポンスのトークン数で、
+		// いま足した tool_result の分は含まない。閾値を上限より手前に置くのは
+		// このためでもある。
+		if a.shouldCompact() {
+			if err := a.Compact(ctx); err != nil {
+				return "", err
+			}
+		}
 	}
 
 	msg := fmt.Sprintf("(LLMの呼び出しが上限の%d回に達したため、ターンを終了しました)", a.maxIterations)
@@ -259,7 +272,7 @@ func (a *Agent) executeTool(ctx context.Context, block anthropic.ContentBlockUni
 	// といった正常なケースで起こる。
 	// 個々のツールに任せず1箇所で処理するのは、権限チェックと同じ理由。
 	if result == "" {
-		result = "(出力は空です)"
+		result = "(ツールの出力は空です)"
 	}
 
 	result = truncateToolResult(result, a.maxToolResultChars)

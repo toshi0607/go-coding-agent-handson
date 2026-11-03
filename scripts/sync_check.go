@@ -1,6 +1,6 @@
 //go:build ignore
 
-// sync_check は「step 10 の解答は final そのもの」という不変条件を検査する。
+// sync_check は「最後のstep(step 11)の解答は final そのもの」という不変条件を検査する。
 //
 //	go run scripts/sync_check.go <finalディレクトリ> <stepディレクトリ> <穴のマーカー>
 //

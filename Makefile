@@ -22,7 +22,7 @@ else
 	$(MAKE) build vet test
 endif
 
-# 教材が壊れていないか(穴あきstepが赤であること、step 10 = final など)を
+# 教材が壊れていないか(穴あきstepが赤であること、step 11 = final など)を
 # 検査する。全stepのテストを走らせるので1分ほどかかる。
 check-steps:
 	./scripts/check-steps.sh

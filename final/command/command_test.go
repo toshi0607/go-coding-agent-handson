@@ -44,12 +44,12 @@ func linkCommand(t *testing.T, dir, name, target string) {
 	}
 }
 
-func TestIsCommand(t *testing.T) {
+func TestExecuteRecognizesCommands(t *testing.T) {
 	r := newRegistry(t, t.TempDir())
 
 	commands := []string{"/help", "/explain main.go", "/my-cmd", "/my_cmd2"}
 	for _, line := range commands {
-		if !r.IsCommand(line) {
+		if _, ok := r.Execute(line); !ok {
 			t.Errorf("コマンドと判定されるべき: %q", line)
 		}
 	}
@@ -60,14 +60,14 @@ func TestIsCommand(t *testing.T) {
 	notCommands := []string{
 		"普通の入力",
 		"/Users/foo/main.go を読んで",
-		"/etc/hosts の中身は?",
+		"/etc/hosts の中身は？",
 		"/",
 		"/ 何か",
 		"/../../etc/passwd",
 	}
 	for _, line := range notCommands {
-		if r.IsCommand(line) {
-			t.Errorf("コマンドではないと判定されるべき: %q", line)
+		if got, ok := r.Execute(line); ok {
+			t.Errorf("コマンドではないと判定されるべき: %q → %+v", line, got)
 		}
 	}
 }
@@ -87,7 +87,7 @@ func TestExecuteRejectsPathTraversal(t *testing.T) {
 	}
 	r := newRegistry(t, workDir)
 	for _, name := range []string{"../../secret", "../secret", "/etc/passwd"} {
-		got := r.Execute("/" + name)
+		got, _ := r.Execute("/" + name)
 		if got.Prompt != "" {
 			t.Errorf("パストラバーサルでファイルが読まれた: %q → %q", name, got.Prompt)
 		}
@@ -119,7 +119,10 @@ func TestExecuteRejectsSymlinkEscape(t *testing.T) {
 		dir := t.TempDir()
 		linkCommand(t, dir, "leak", secret)
 
-		got := newRegistry(t, dir).Execute("/leak")
+		got, ok := newRegistry(t, dir).Execute("/leak")
+		if !ok {
+			t.Fatal("/leak はスラッシュコマンドとして扱われるべき")
+		}
 		if got.Prompt != "" {
 			t.Errorf("作業ディレクトリ外のファイルが展開された: %q", got.Prompt)
 		}
@@ -138,7 +141,7 @@ func TestExecuteRejectsSymlinkEscape(t *testing.T) {
 		dir := t.TempDir()
 		linkCommand(t, dir, "leak", notYet)
 
-		got := newRegistry(t, dir).Execute("/leak")
+		got, _ := newRegistry(t, dir).Execute("/leak")
 		if got.Prompt != "" {
 			t.Errorf("壊れたリンク経由で展開された: %q", got.Prompt)
 		}
@@ -154,7 +157,7 @@ func TestExecuteRejectsSymlinkEscape(t *testing.T) {
 		}
 		linkCommand(t, dir, "shared", real)
 
-		got := newRegistry(t, dir).Execute("/shared main.go")
+		got, _ := newRegistry(t, dir).Execute("/shared main.go")
 		if got.Prompt != "共有プロンプト: main.go" {
 			t.Errorf("作業ディレクトリ内のリンクが拒否された: Prompt=%q Output=%q", got.Prompt, got.Output)
 		}
@@ -164,13 +167,13 @@ func TestExecuteRejectsSymlinkEscape(t *testing.T) {
 func TestBuiltinCommands(t *testing.T) {
 	r := newRegistry(t, t.TempDir())
 
-	if got := r.Execute("/clear"); !got.Clear {
+	if got, _ := r.Execute("/clear"); !got.Clear {
 		t.Error("/clear は Clear フラグを立てるべき")
 	}
-	if got := r.Execute("/compact"); !got.Compact {
+	if got, _ := r.Execute("/compact"); !got.Compact {
 		t.Error("/compact は Compact フラグを立てるべき")
 	}
-	if got := r.Execute("/help"); !strings.Contains(got.Output, "/clear") {
+	if got, _ := r.Execute("/help"); !strings.Contains(got.Output, "/clear") {
 		t.Errorf("/help の出力にコマンド一覧がない: %q", got.Output)
 	}
 }
@@ -180,21 +183,24 @@ func TestCustomCommand(t *testing.T) {
 	writeCommand(t, dir, "explain", "次のファイルを日本語で解説してください: $ARGUMENTS")
 
 	r := newRegistry(t, dir)
-	got := r.Execute("/explain main.go")
+	got, _ := r.Execute("/explain main.go")
 	want := "次のファイルを日本語で解説してください: main.go"
 	if got.Prompt != want {
 		t.Errorf("got %q, want %q", got.Prompt, want)
 	}
 
 	// /help にカスタムコマンドも載る。
-	if help := r.Execute("/help"); !strings.Contains(help.Output, "/explain") {
+	if help, _ := r.Execute("/help"); !strings.Contains(help.Output, "/explain") {
 		t.Errorf("/help にカスタムコマンドが載っていない: %q", help.Output)
 	}
 }
 
 func TestUnknownCommand(t *testing.T) {
 	r := newRegistry(t, t.TempDir())
-	got := r.Execute("/nosuch")
+	got, ok := r.Execute("/nosuch")
+	if !ok {
+		t.Fatal("名前として妥当な未知のコマンドはスラッシュコマンドとして扱うべき")
+	}
 	if got.Prompt != "" {
 		t.Error("未知のコマンドはLLMに送らない")
 	}

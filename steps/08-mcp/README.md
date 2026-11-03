@@ -66,7 +66,7 @@ AGENT_MCP_LOG=1 go run ../steps/08-mcp
 
 `example/.mcp.json` には、例のMCPサーバー `weather`([example/weather-server](../../example/weather-server/main.go))が `go run ./weather-server` で起動するように書いてあります。`get_weather` ツールを1つだけ持ち、引数の `city` を受け取って「晴れ (Tokyo)」のような固定の結果を返すサーバーです。
 
-起動すると、設定ファイルのシェルコマンドを実行してよいかの確認が表示されます。一覧に `go run ./weather-server` と、`.agent/settings.json` の allowlist が出ることを確かめて `y` を入力します。`n` と答えると起動が中止されることも確かめてください。続けて「東京の天気を教えて」と頼み、`mcp__weather__get_weather` の実行を許可すると、標準エラー出力にMCPサーバーとやりとりしたJSONが表示されます。
+起動すると、設定ファイルのコマンドを実行してよいかの確認が表示されます。一覧に `go run ./weather-server` と、`.agent/settings.json` の allowlist が出ることを確かめて `y` を入力します。`n` と答えると起動が中止されることも確かめてください。続けて「東京の天気を教えて」と頼み、`mcp__weather__get_weather` の実行を許可すると、標準エラー出力にMCPサーバーとやりとりしたJSONが表示されます。
 
 ほかのMCPサーバー(npxで動く公開サーバーなど)も、`.mcp.json` の `mcpServers` に `"名前": {"command": "...", "args": [...]}` を足すだけで、そのツールがエージェントに加わります。
 

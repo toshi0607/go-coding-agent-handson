@@ -125,16 +125,18 @@ func New(cfg Config) *Agent {
 // Run は1ユーザーターンを処理する。ツール実行を挟みながらLLMとの
 // 往復を繰り返し、最終的なテキストのレスポンスを返す。
 func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
-	// TODO(step06-2): 自動compactionを発動させる。
+	// TODO(step06-2): 自動compactionを発動させる(2か所。1か所目はここ)。
 	//
 	// 直近のトークン使用量(a.lastUsageTokens)が閾値を超えていたら
 	// (a.shouldCompact)、履歴を圧縮する(a.Compact。
 	// エラーはそのまま返してよい)。
 	//
 	// このstepの主題は「圧縮のコードを書くこと」ではなく「どこで
-	// 圧縮するか」である。この位置(ターンの開始時)以外——たとえば
-	// 下のツールループの中——で圧縮すると何が壊れるかは README と
-	// TestCompactionHappensOnlyAtTurnBoundary を参照。
+	// 圧縮するか」である。圧縮してよいのは tool_use と tool_result の
+	// 対応が閉じている地点だけで、ここ(ターンの開始時)と、下のツール
+	// ループで tool_result を履歴に足した直後の2か所がそれにあたる。
+	// 対応が閉じていない地点で圧縮すると何が壊れるかは README と
+	// TestCompactionHappensOnlyWherePairsAreClosed を参照。
 
 	a.history = append(a.history, anthropic.NewUserMessage(anthropic.NewTextBlock(userInput)))
 
@@ -200,6 +202,9 @@ func (a *Agent) Run(ctx context.Context, userInput string) (string, error) {
 			results = append(results, a.executeTool(ctx, block))
 		}
 		a.history = append(a.history, anthropic.NewUserMessage(results...))
+
+		// TODO(step06-2続き): 2か所目。tool_result を履歴に足した直後にも、
+		// ターンの開始時と同じ判定と圧縮を行う。
 	}
 
 	msg := fmt.Sprintf("(LLMの呼び出しが上限の%d回に達したため、ターンを終了しました)", a.maxIterations)
@@ -242,7 +247,7 @@ func (a *Agent) executeTool(ctx context.Context, block anthropic.ContentBlockUni
 	// といった正常なケースで起こる。
 	// 個々のツールに任せず1箇所で処理するのは、権限チェックと同じ理由。
 	if result == "" {
-		result = "(出力は空です)"
+		result = "(ツールの出力は空です)"
 	}
 
 	result = truncateToolResult(result, a.maxToolResultChars)

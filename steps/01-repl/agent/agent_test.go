@@ -41,7 +41,7 @@ func TestHistoryCarriesAcrossTurns(t *testing.T) {
 	if _, err := a.Run(t.Context(), "私はGopherです"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := a.Run(t.Context(), "私の名前を覚えていますか?"); err != nil {
+	if _, err := a.Run(t.Context(), "私の名前を覚えていますか？"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -54,7 +54,7 @@ func TestHistoryCarriesAcrossTurns(t *testing.T) {
 		t.Fatalf("2回目のリクエストは履歴3件を含むはず: %d件", got)
 	}
 	second, _ := json.Marshal(reqs[1].Messages)
-	for _, want := range []string{"私はGopherです", "こんにちは、Gopherさん!", "私の名前を覚えていますか?"} {
+	for _, want := range []string{"私はGopherです", "こんにちは、Gopherさん!", "私の名前を覚えていますか？"} {
 		if !strings.Contains(string(second), want) {
 			t.Errorf("2回目のリクエストに %q が含まれていない: %s", want, second)
 		}

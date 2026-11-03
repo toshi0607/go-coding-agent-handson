@@ -64,24 +64,6 @@ func New(ws *tools.Workspace) *Registry {
 	return &Registry{ws: ws}
 }
 
-// IsCommand は入力がスラッシュコマンドかどうかを判定する。
-//
-// 「/ で始まる」だけでは足りない。ユーザーは
-//
-//	/Users/foo/main.go を読んで
-//
-// のように、絶対パスから始まる依頼を書くことがある。これをスラッシュ
-// コマンドとして扱うと「スラッシュコマンド /Users/foo/main.go は存在しません」
-// と表示されて依頼がLLMに届かない。名前として妥当かどうかまで見る。
-func (r *Registry) IsCommand(line string) bool {
-	line = strings.TrimSpace(line)
-	if !strings.HasPrefix(line, "/") {
-		return false
-	}
-	name, _, _ := strings.Cut(strings.TrimPrefix(line, "/"), " ")
-	return isValidName(name)
-}
-
 // isValidName はコマンド名として許可する形を定める。
 //
 // TODO(step09-2): 実装する。
@@ -98,7 +80,8 @@ func (r *Registry) IsCommand(line string) bool {
 // 対策はどちらも同じで、「危険な文字を弾く」のではなく「コマンド名として
 // 安全な文字(英数字と - _)だけを通す」。ファイル操作の範囲を作業ディレクトリに
 // 限定する tools.Workspace や bash の isSimpleCommand と同じ考え方である。
-// 空文字も false にすること。
+// 空文字も false にすること。isSimpleCommand と同じく、regexp パッケージの
+// 文字クラスで書ける。
 //
 // なお、この検証だけでは足りない。コマンドファイル自身がシンボリック
 // リンクなら、名前が妥当でも外を読めてしまう——だから Execute では
@@ -109,40 +92,55 @@ func isValidName(name string) bool {
 	panic("TODO(step09-2): steps/09-commands-skills/command/command.go を実装してください(hints.md 参照)")
 }
 
-// Execute はコマンドを実行する。
-func (r *Registry) Execute(line string) Result {
-	line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "/"))
-	name, args, _ := strings.Cut(line, " ")
+// Execute は入力がスラッシュコマンドなら実行して、結果と true を返す。
+// スラッシュコマンドでなければゼロ値の Result と false を返すので、
+// 呼び出し側はその入力を通常の依頼としてLLMに渡す。
+//
+// 「/ で始まる」だけでは足りない。ユーザーは
+//
+//	/Users/foo/main.go を読んで
+//
+// のように、絶対パスから始まる依頼を書くことがある。これをスラッシュ
+// コマンドとして扱うと「スラッシュコマンド /Users/foo/main.go は存在しません」
+// と表示されて依頼がLLMに届かない。そこで / の後ろ(最初の空白まで)が
+// コマンド名として妥当かどうかまで見て、妥当でなければスラッシュコマンド
+// ではないと判断する。
+//
+// 判定と実行の入口をこの1つにまとめているので、名前の検証(isValidName)は
+// パスを組み立てる前に必ず1回だけ通る。判定と実行が別々のメソッドだと、
+// 判定を呼ばずに実行だけを呼ぶ経路で検証が抜けうる。
+func (r *Registry) Execute(line string) (Result, bool) {
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, "/") {
+		return Result{}, false
+	}
+	name, args, _ := strings.Cut(strings.TrimPrefix(line, "/"), " ")
+	if !isValidName(name) {
+		return Result{}, false
+	}
 
 	switch name {
 	case "help":
-		return Result{Output: r.helpText()}
+		return Result{Output: r.helpText()}, true
 	case "clear":
-		return Result{Clear: true, Output: "会話履歴をクリアしました。"}
+		return Result{Clear: true, Output: "会話履歴をクリアしました。"}, true
 	case "compact":
-		return Result{Compact: true}
-	}
-
-	// IsCommand で弾いているはずだが、Execute だけを呼ばれても
-	// 安全であるようにここでも検証する。パスを組み立てる直前が、
-	// 検証を置くべき場所である。
-	if !isValidName(name) {
-		return Result{Output: fmt.Sprintf("スラッシュコマンドの名前に使えない文字が含まれています: /%s", name)}
+		return Result{Compact: true}, true
 	}
 
 	// 組み込みになければカスタムコマンドを探す。
 	// パスは必ず Workspace 経由で解決する(上の ws のコメントを参照)。
 	path, err := r.ws.Resolve(filepath.Join(CommandsDir, name+".md"))
 	if err != nil {
-		return Result{Output: fmt.Sprintf("スラッシュコマンド /%s は読み込めません: %v", name, err)}
+		return Result{Output: fmt.Sprintf("スラッシュコマンド /%s は読み込めません: %v", name, err)}, true
 	}
 	content, err := os.ReadFile(path)
 	if err != nil {
-		return Result{Output: fmt.Sprintf("スラッシュコマンド /%s は存在しません。/help で一覧を確認できます。", name)}
+		return Result{Output: fmt.Sprintf("スラッシュコマンド /%s は存在しません。/help で一覧を確認できます。", name)}, true
 	}
 	// $ARGUMENTS をコマンドの引数部分で置き換えてプロンプトにする。
 	prompt := strings.ReplaceAll(string(content), argumentsPlaceholder, strings.TrimSpace(args))
-	return Result{Prompt: prompt}
+	return Result{Prompt: prompt}, true
 }
 
 func (r *Registry) helpText() string {
