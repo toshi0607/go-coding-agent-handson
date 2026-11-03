@@ -309,6 +309,11 @@ func makeAsker(ctx context.Context, stdin *lineReader, choices string) permissio
 	return func(question string) (string, error) {
 		fmt.Printf("\n%s\n  %s > ", question, choices)
 		answer, err := stdin.ReadLine(ctx)
+		// 最後の行に改行がないと、その行と io.EOF が同時に返る。
+		// 行があれば、それを答えとして使う。
+		if errors.Is(err, io.EOF) && answer != "" {
+			err = nil
+		}
 		if err != nil {
 			return "", err
 		}

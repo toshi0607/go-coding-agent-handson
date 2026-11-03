@@ -59,3 +59,18 @@ func TestLineReaderPrefersCancelOverArrivedLine(t *testing.T) {
 		}
 	}
 }
+
+// 改行で終わらない最後の行も、承認の答えとして受け取ること。
+// printf 'y' | のように改行なしで答えを渡したときに、EOF で失敗しないため。
+func TestAskerAcceptsLastLineWithoutNewline(t *testing.T) {
+	ask := makeAsker(t.Context(), newLineReader(strings.NewReader("y")), "[y]es / [n]o")
+	answer, err := ask("実行しますか？")
+	if answer != "y" || err != nil {
+		t.Fatalf("改行なしの y: %q, %v", answer, err)
+	}
+
+	ask = makeAsker(t.Context(), newLineReader(strings.NewReader("")), "[y]es / [n]o")
+	if _, err := ask("実行しますか？"); !errors.Is(err, io.EOF) {
+		t.Fatalf("入力がなければ io.EOF のはず: %v", err)
+	}
+}
