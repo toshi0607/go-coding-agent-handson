@@ -233,9 +233,7 @@ func TestAgentToolRunsSubAgent(t *testing.T) {
 		llm.TextResponse("調査完了: auth/login.go を確認してください"),
 	)
 
-	agentTool := NewSubAgentTool(func() *Agent {
-		return New(Config{Client: client, Model: "claude-opus-5-5"})
-	})
+	agentTool := NewSubAgentTool(Config{Client: client, Model: "claude-opus-5-5"})
 	parent := New(Config{
 		Client: client, Model: "claude-opus-5-5",
 		Tools:      []tools.Tool{agentTool},
