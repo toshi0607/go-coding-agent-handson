@@ -18,6 +18,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os/exec"
 	"time"
@@ -25,6 +26,10 @@ import (
 
 // hookTimeout は1つのhookコマンドの実行時間上限。Claude Code の command hook のデフォルト(600秒)に合わせた。
 const hookTimeout = 600 * time.Second
+
+// hookWaitDelay はタイムアウトでhookコマンドを止めた後、stderr を待つ上限。
+// 理由は tools/bash.go の bashWaitDelay と同じ。
+const hookWaitDelay = time.Second
 
 // blockExitCode はPreToolUseでツール実行をブロックする終了コード。
 const blockExitCode = 2
@@ -119,12 +124,13 @@ func (r *Runner) run(ctx context.Context, command string, p payload) (stderr []b
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "bash", "-c", command)
+	cmd.WaitDelay = hookWaitDelay
 	cmd.Stdin = bytes.NewReader(data)
 	var errBuf bytes.Buffer
 	cmd.Stderr = &errBuf
 
 	runErr := cmd.Run()
-	if exitErr, ok := runErr.(*exec.ExitError); ok {
+	if exitErr, ok := errors.AsType[*exec.ExitError](runErr); ok {
 		return errBuf.Bytes(), exitErr.ExitCode(), nil
 	}
 	return errBuf.Bytes(), 0, runErr

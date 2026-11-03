@@ -14,6 +14,7 @@ package agent
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"strings"
 
@@ -99,6 +100,11 @@ func (a *Agent) Compact(ctx context.Context) error {
 		if block.Type == "text" {
 			summary.WriteString(block.Text)
 		}
+	}
+	// 空の要約で置き換えると、ここまでの会話がすべて失われる。
+	// 要約に失敗したときと同じく、会話履歴を残してエラーを返す。
+	if strings.TrimSpace(summary.String()) == "" {
+		return errors.New("compaction用の要約が空でした")
 	}
 
 	// 要約を「ユーザーからの引き継ぎメッセージ」として新しい履歴の先頭に置く。

@@ -39,15 +39,15 @@ func truncateToolResult(result string, maxChars int) string {
 		fmt.Sprintf("\n... (ツール結果が長すぎるため、先頭の %d 文字だけを残して切り詰めました。全体は %d 文字あります。続きが必要なら範囲を絞って取得してください)", maxChars, total)
 }
 
-// truncateRunes は s の先頭 max 文字と、s 全体の文字数を返す。
+// truncateRunes は s の先頭 limit 文字と、s 全体の文字数を返す。
 //
 // []rune への変換ではなく range で走査しているのは、ツール結果が
 // 数MBになりうるため。range over string はルーンの開始バイト位置を
 // 返すので、そこで切ればバイト境界とルーン境界が一致する。
-func truncateRunes(s string, max int) (head string, total int) {
+func truncateRunes(s string, limit int) (head string, total int) {
 	head = s
 	for i := range s {
-		if total == max {
+		if total == limit {
 			head = s[:i]
 		}
 		total++

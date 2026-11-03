@@ -28,7 +28,7 @@ func truncateToolResult(result string, maxChars int) string {
 	panic("TODO(step06-1): steps/06-context/agent/truncate.go を実装してください(hints.md 参照)")
 }
 
-// truncateRunes は s の先頭 max 文字と、s 全体の文字数を返す。
+// truncateRunes は s の先頭 limit 文字と、s 全体の文字数を返す。
 //
 // TODO(step06-1続き): 実装する。
 //
@@ -41,6 +41,6 @@ func truncateToolResult(result string, maxChars int) string {
 // なりうるので全体の変換コピーは避けたい。range over string が
 // 「ルーンの開始バイト位置」を返すことを利用すると、コピーなしで
 // バイト境界とルーン境界を一致させられる。
-func truncateRunes(s string, max int) (head string, total int) {
+func truncateRunes(s string, limit int) (head string, total int) {
 	panic("TODO(step06-1続き): steps/06-context/agent/truncate.go を実装してください(hints.md 参照)")
 }

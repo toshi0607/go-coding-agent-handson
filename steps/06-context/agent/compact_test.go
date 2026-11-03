@@ -93,3 +93,20 @@ func TestCompactKeepsToolsAndSystem(t *testing.T) {
 		t.Errorf("要約用のmax_tokensが使われていない: %d", req.MaxTokens)
 	}
 }
+
+// 要約が空のときは、会話履歴を置き換えずにエラーを返すこと。
+// 空の要約で置き換えると、ここまでの会話が黙って失われる。
+func TestCompactKeepsHistoryWhenSummaryIsEmpty(t *testing.T) {
+	client := llm.NewReplayClient(llm.TextResponse(""))
+	a := New(Config{Client: client, Model: "claude-opus-5-5"})
+	a.history = []anthropic.MessageParam{
+		anthropic.NewUserMessage(anthropic.NewTextBlock("REPLを実装して")),
+		anthropic.NewAssistantMessage(anthropic.NewTextBlock("実装しました")),
+	}
+	if err := a.Compact(t.Context()); err == nil {
+		t.Fatal("空の要約はエラーになるべき")
+	}
+	if n := len(a.History()); n != 2 {
+		t.Errorf("会話履歴が置き換えられた: %d件", n)
+	}
+}

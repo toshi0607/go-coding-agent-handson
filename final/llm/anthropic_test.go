@@ -1,7 +1,9 @@
 package llm
 
 import (
+	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -150,5 +152,23 @@ func TestStreamReportsServerError(t *testing.T) {
 		Model: "claude-opus-5-5", MaxTokens: 100,
 	}, nil); err == nil {
 		t.Fatal("ストリーム中のエラーが握りつぶされている")
+	}
+}
+
+// error イベントが届かないまま、接続だけが途中で閉じた場合もエラーを返すこと。
+// SSEとしては正常に終わったように見えるので stream.Err() は nil になる。
+// message_stop が届いたかどうかで、未完成のレスポンスを見分ける必要がある。
+func TestStreamRejectsStreamEndingBeforeMessageStop(t *testing.T) {
+	client := newSSEClient(t, []string{
+		sse("message_start", `{"type":"message_start","message":{"id":"msg_1","type":"message","role":"assistant","model":"claude-opus-5-5","content":[],"stop_reason":null,"usage":{"input_tokens":1,"output_tokens":0}}}`),
+		sse("content_block_start", `{"type":"content_block_start","index":0,"content_block":{"type":"tool_use","id":"toolu_1","name":"read_file","input":{}}}`),
+		sse("content_block_delta", `{"type":"content_block_delta","index":0,"delta":{"type":"input_json_delta","partial_json":"{\"path\":"}}`),
+	})
+
+	_, err := client.Stream(t.Context(), anthropic.MessageNewParams{
+		Model: "claude-opus-5-5", MaxTokens: 100,
+	}, nil)
+	if !errors.Is(err, io.ErrUnexpectedEOF) {
+		t.Fatalf("途中で切れたストリームを完成品として返している: err = %v", err)
 	}
 }

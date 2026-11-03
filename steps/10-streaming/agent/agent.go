@@ -247,7 +247,8 @@ func (a *Agent) executeTool(ctx context.Context, block anthropic.ContentBlockUni
 	result, err := tool.Run(ctx, block.Input)
 	if err != nil {
 		fmt.Fprintf(a.out, "  ⨯ %v\n", err)
-		return anthropic.NewToolResultBlock(block.ID, err.Error(), true)
+		// 失敗したビルドのログのように、エラーも長くなることがあるので切り詰める。
+		return anthropic.NewToolResultBlock(block.ID, truncateToolResult(err.Error(), a.maxToolResultChars), true)
 	}
 
 	// 空文字のツール結果は、空のままでも Messages API は受け付けるが、

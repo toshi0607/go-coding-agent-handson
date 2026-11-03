@@ -14,6 +14,15 @@ import (
 // エージェント全体が固まるのを防ぐ。
 const bashTimeout = 60 * time.Second
 
+// bashWaitDelay はタイムアウトで bash を止めた後、出力を待つ上限。
+//
+// exec.CommandContext が止めるのは直接の子プロセス(bash)だけである。
+// `sleep 3600 &` のように bash が起動した孫プロセスが出力のパイプを
+// 持ったまま残ると、CombinedOutput はパイプが閉じるまで返らず、
+// タイムアウトが効かない。WaitDelay を設定すると、bash を止めてから
+// この時間が過ぎた時点でパイプを閉じて戻る。
+const bashWaitDelay = time.Second
+
 // Bash は任意のシェルコマンドを実行するツール。
 // テスト実行・ビルド・grep など、専用ツールを作っていない操作を
 // 全部カバーできる万能ツールである一方、エージェントの中で最も危険な
@@ -79,17 +88,18 @@ func (b *Bash) Run(ctx context.Context, input json.RawMessage) (string, error) {
 	defer cancel()
 
 	cmd := exec.CommandContext(ctx, "bash", "-c", in.Command)
+	cmd.WaitDelay = bashWaitDelay
 	if b.ws != nil {
 		cmd.Dir = b.ws.Root()
 	}
 	output, err := cmd.CombinedOutput()
-	if ctx.Err() == context.DeadlineExceeded {
-		return "", fmt.Errorf("タイムアウト(%s)しました:\n%s", bashTimeout, output)
+	if errors.Is(ctx.Err(), context.DeadlineExceeded) {
+		return "", fmt.Errorf("タイムアウト(%s)しました: %w\n%s", bashTimeout, ctx.Err(), output)
 	}
 	if err != nil {
 		// 非ゼロ終了はエラーとして返すが、出力も含める。
 		// LLMはエラー出力を読んで次の一手を考えるので、出力こそが本体。
-		return "", fmt.Errorf("コマンドが失敗しました (%v):\n%s", err, output)
+		return "", fmt.Errorf("コマンドが失敗しました (%w):\n%s", err, output)
 	}
 	return string(output), nil
 }

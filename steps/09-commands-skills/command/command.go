@@ -14,6 +14,7 @@
 package command
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -135,8 +136,11 @@ func (r *Registry) Execute(line string) (Result, bool) {
 		return Result{Output: fmt.Sprintf("スラッシュコマンド /%s は読み込めません: %v", name, err)}, true
 	}
 	content, err := os.ReadFile(path)
-	if err != nil {
+	if errors.Is(err, os.ErrNotExist) {
 		return Result{Output: fmt.Sprintf("スラッシュコマンド /%s は存在しません。/help で一覧を確認できます。", name)}, true
+	}
+	if err != nil {
+		return Result{Output: fmt.Sprintf("スラッシュコマンド /%s は読み込めません: %v", name, err)}, true
 	}
 	// $ARGUMENTS をコマンドの引数部分で置き換えてプロンプトにする。
 	prompt := strings.ReplaceAll(string(content), argumentsPlaceholder, strings.TrimSpace(args))
