@@ -14,14 +14,14 @@ steps/          穴埋め式の段階実装(本のPart 1に対応。下の「進
 ├── 04-bash-permission/  bash実行・承認フロー・封じ込め
 ├── 05-system-prompt/    システムプロンプトとCLAUDE.md
 ├── 06-context/          コンテキスト管理(切り詰め・compaction)
-├── 07-subagent/         サブエージェント(taskツール)
+├── 07-subagent/         サブエージェント(agentツール)
 ├── 08-mcp/              MCPクライアント(公式Go SDK、stdio transport)
 ├── 09-commands-skills/  スラッシュコマンドとスキル
 ├── 10-streaming/        ストリーミング
 └── 11-hooks/            hooks(PreToolUse / PostToolUse)
 final/          完成形のミニコーディングエージェント
 ├── main.go       部品の組み立てとREPL
-├── agent/        エージェントループ本体 + サブエージェント(taskツール) + compaction・ツール結果の切り詰め
+├── agent/        エージェントループ本体 + サブエージェント(agentツール) + compaction・ツール結果の切り詰め
 ├── llm/          LLM呼び出しの境界(実API / 録画リプレイ)
 ├── tools/        read_file, list_files, edit_file, bash + 作業ディレクトリの封じ込め
 ├── permission/   承認フロー(allowlist)

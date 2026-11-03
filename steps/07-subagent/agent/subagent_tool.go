@@ -5,10 +5,10 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/toshi0607/go-coding-agent-handson/steps/08-mcp/tools"
+	"github.com/toshi0607/go-coding-agent-handson/steps/07-subagent/tools"
 )
 
-// TaskTool はサブエージェントを起動するツール。
+// SubAgentTool はサブエージェントを起動するツール。
 //
 // なぜサブエージェントが必要か。調査タスクは大量のツール結果
 // (ファイル一覧、grep結果、読んだファイルの中身)を生むが、
@@ -24,30 +24,30 @@ import (
 // 親の文脈を知らないからこそコンテキストが軽くなる。裏返すと、
 // promptには「サブエージェントが単独で作業を完遂できるだけの情報」を
 // すべて書き込む必要がある。LLMへのツール説明でそれを要求している。
-type TaskTool struct {
-	// newSubAgent はサブエージェントを作る関数。task ツールが呼ばれる
+type SubAgentTool struct {
+	// newSubAgent はサブエージェントを作る関数。agent ツールが呼ばれる
 	// たびに呼び、会話履歴が空の Agent を作る。
 	// どんなツール・権限を持たせるかは呼び出し側(main)が決める。
 	newSubAgent func() *Agent
 }
 
-// NewTaskTool は TaskTool を作る。
-// newSubAgent が返すエージェントには TaskTool 自身を含めないこと。
+// NewSubAgentTool は SubAgentTool を作る。
+// newSubAgent が返すエージェントには SubAgentTool 自身を含めないこと。
 // 含めると入れ子にできるが、この実装は入れ子の深さを数えないので含めない。
-func NewTaskTool(newSubAgent func() *Agent) *TaskTool {
-	return &TaskTool{newSubAgent: newSubAgent}
+func NewSubAgentTool(newSubAgent func() *Agent) *SubAgentTool {
+	return &SubAgentTool{newSubAgent: newSubAgent}
 }
 
-func (t *TaskTool) Name() string { return "task" }
+func (t *SubAgentTool) Name() string { return "agent" }
 
-func (t *TaskTool) Description() string {
+func (t *SubAgentTool) Description() string {
 	return "サブエージェントにタスクを委任します。複数ファイルにまたがる調査や検索など、" +
 		"途中経過よりも最終的な結論だけが欲しいタスクに使ってください。" +
 		"サブエージェントはこれまでの会話を一切知らないため、prompt には" +
 		"背景・対象・期待する出力形式など、単独で作業できるだけの情報をすべて含めてください。"
 }
 
-func (t *TaskTool) InputSchema() tools.Schema {
+func (t *SubAgentTool) InputSchema() tools.Schema {
 	return tools.Schema{
 		Properties: map[string]any{
 			"description": tools.StringProperty("タスクの短い説明(進捗表示用)。例: 認証処理の調査"),
@@ -57,7 +57,7 @@ func (t *TaskTool) InputSchema() tools.Schema {
 	}
 }
 
-func (t *TaskTool) Run(ctx context.Context, input json.RawMessage) (string, error) {
+func (t *SubAgentTool) Run(ctx context.Context, input json.RawMessage) (string, error) {
 	var in struct {
 		Description string `json:"description"`
 		Prompt      string `json:"prompt"`
@@ -69,14 +69,18 @@ func (t *TaskTool) Run(ctx context.Context, input json.RawMessage) (string, erro
 		return "", fmt.Errorf("prompt を指定してください")
 	}
 
-	// サブエージェントは毎回まっさらな状態で作る。
-	// 会話履歴は空。ここが「コンテキスト分離」の実装のすべてである。
-	sub := t.newSubAgent()
-	result, err := sub.Run(ctx, in.Prompt)
-	if err != nil {
-		return "", fmt.Errorf("サブエージェントの実行に失敗しました: %w", err)
-	}
-	// 親に返るのはこの最終テキストだけ。サブエージェントが何十回
-	// ツールを呼んでいても、親の履歴にはこの文字列しか残らない。
-	return result, nil
+	// TODO(step07-1): サブエージェントを起動してタスクを委任する。
+	//
+	//  - t.newSubAgent() でサブエージェントを作る。newSubAgent が返すのは
+	//    会話履歴が空の、毎回まっさらなエージェントである
+	//  - 渡すのは in.Prompt だけ。親の会話履歴は渡さない(そもそも
+	//    渡せる口がないことを確認してほしい)。ここが「コンテキスト分離」の
+	//    実装のすべてである
+	//  - サブエージェントの Run の戻り値(最終テキスト)を返す。親の履歴に
+	//    残るのはこのテキストだけで、サブエージェントが何十回ツールを
+	//    呼んでいても、その過程は親のコンテキストを消費しない
+	//
+	// 数行で書けるが、テストは「親の履歴がサブに漏れていないか」
+	// 「サブの結論だけが親に渡るか」まで見ている。
+	panic("TODO(step07-1): steps/07-subagent/agent/subagent_tool.go を実装してください(hints.md 参照)")
 }
