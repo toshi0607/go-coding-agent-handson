@@ -64,11 +64,10 @@ const summaryMaxTokens = 8192
 // 一度失った詳細は戻らない。
 //
 // 要約リクエストは通常のターンと同じ形(buildParams() の結果)で送る。
-// 要約だからといって Messages 以外を省いてはいけない:
-// 圧縮対象の履歴には tool_use / tool_result ブロックが含まれており、
-// tools を伴わないリクエストでそれらを送るとAPIに拒否される。
-// 「要約用の軽いリクエスト」を別途組み立てたくなるが、履歴の中身と
-// リクエストのパラメーターには対応関係があり、勝手に外せない。
+// 要約のためだけに、ツールの定義を外したリクエストを別に組み立てずに済む。
+// なお、履歴に tool_use / tool_result ブロックが含まれていても、
+// ツールの定義のないリクエストをMessages APIは受け付けた
+// (2026年10月、claude-haiku-5-5 と claude-opus-5-5 で確認)。
 func (a *Agent) Compact(ctx context.Context) error {
 	if len(a.history) == 0 {
 		return nil
