@@ -60,10 +60,10 @@ func TestCompact(t *testing.T) {
 
 // 要約リクエストが「通常のターンと同じ形」であることの回帰テスト。
 //
-// 履歴に tool_use / tool_result が含まれた状態で tools なしのリクエストを
-// 送るとAPIに拒否され、compactionが必要な長い会話ほど失敗する——という
-// 質の悪いバグになる。ReplayClientはリクエストを検証しないので、
-// テスト側で明示的に確認する。
+// 要約リクエストは buildParams() の結果をそのまま使うので、system と tools は
+// 通常のターンと同じになるはず。tools を渡す以上、tool_choice: none で
+// テキストの要約を強制していることも確かめる。ReplayClientは
+// リクエストを検証しないので、テスト側で明示的に確認する。
 func TestCompactKeepsToolsAndSystem(t *testing.T) {
 	client := llm.NewReplayClient(llm.TextResponse("要約です"))
 	a := New(Config{
